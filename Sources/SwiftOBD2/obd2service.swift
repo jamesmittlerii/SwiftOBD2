@@ -1,9 +1,11 @@
 import Combine
 import CoreBluetooth
 import Foundation
+import IOBluetooth
 
 public enum ConnectionType: String, CaseIterable {
     case bluetooth = "Bluetooth"
+    case bluetoothClassic = "Bluetooth Classic"
     case wifi = "Wi-Fi"
     case demo = "Demo"
 }
@@ -53,6 +55,14 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         }
     }
 
+    /// Optional preferences for Bluetooth Classic
+    private var classicPreferredName: String?
+    private var classicPreferredRFCOMM: BluetoothRFCOMMChannelID?
+
+    /// Optional preferences for Wi‑Fi
+    private var wifiHost: String?
+    private var wifiPort: UInt16?
+
     /// The internal ELM327 object responsible for direct adapter interaction.
     private var elm327: ELM327
 
@@ -72,13 +82,62 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         case .bluetooth:
             let bleManager = BLEManager()
             elm327 = ELM327(comm: bleManager)
+        case .bluetoothClassic:
+            elm327 = ELM327(comm: ClassicBluetoothManager())
         case .wifi:
-            elm327 = ELM327(comm: WifiManager())
+            // Use configured Wi‑Fi host/port if already set, otherwise default WifiManager()
+            if let host = wifiHost, let port = wifiPort {
+                elm327 = ELM327(comm: WifiManager(host: host, port: port))
+            } else {
+                elm327 = ELM327(comm: WifiManager())
+            }
         case .demo:
             elm327 = ELM327(comm: MOCKComm())
         }
 #endif
         elm327.obdDelegate = self
+    }
+
+    /// Initializes the OBDService object with Bluetooth Classic preferences.
+    ///
+    /// - Parameters:
+    ///   - connectionType: The desired connection type.
+    ///   - preferredName: Optional device name (or substring) to prefer when choosing the Classic Bluetooth device.
+    ///   - rfcommChannelID: Optional RFCOMM channel override to use when opening the channel.
+    public convenience init(connectionType: ConnectionType,
+                            preferredName: String?,
+                            rfcommChannelID: BluetoothRFCOMMChannelID?) {
+        self.init(connectionType: connectionType)
+        self.classicPreferredName = preferredName
+        self.classicPreferredRFCOMM = rfcommChannelID
+        initializeELM327()
+    }
+
+    /// Initializes the OBDService object for Wi‑Fi with a custom host and port.
+    ///
+    /// - Parameters:
+    ///   - wifiHost: The hostname or IP address of the ELM327 Wi‑Fi adapter.
+    ///   - wifiPort: The TCP port of the ELM327 Wi‑Fi adapter.
+    public convenience init(wifiHost: String, wifiPort: UInt16) {
+        self.init(connectionType: .wifi)
+        self.wifiHost = wifiHost
+        self.wifiPort = wifiPort
+        initializeELM327()
+    }
+
+    /// Initializes the OBDService object with explicit connection type and optional Wi‑Fi configuration.
+    ///
+    /// - Parameters:
+    ///   - connectionType: The desired connection type.
+    ///   - wifiHost: Optional Wi‑Fi host to use when connectionType is `.wifi`.
+    ///   - wifiPort: Optional Wi‑Fi port to use when connectionType is `.wifi`.
+    public convenience init(connectionType: ConnectionType,
+                            wifiHost: String?,
+                            wifiPort: UInt16?) {
+        self.init(connectionType: connectionType)
+        self.wifiHost = wifiHost
+        self.wifiPort = wifiPort
+        initializeELM327()
     }
 
     // MARK: - Connection Handling
@@ -153,8 +212,16 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         case .bluetooth:
             let bleManager = BLEManager()
             elm327 = ELM327(comm: bleManager)
+        case .bluetoothClassic:
+            let classic = ClassicBluetoothManager(preferredName: classicPreferredName,
+                                                  preferredChannel: classicPreferredRFCOMM)
+            elm327 = ELM327(comm: classic)
         case .wifi:
-            elm327 = ELM327(comm: WifiManager())
+            if let host = wifiHost, let port = wifiPort {
+                elm327 = ELM327(comm: WifiManager(host: host, port: port))
+            } else {
+                elm327 = ELM327(comm: WifiManager())
+            }
         case .demo:
             elm327 = ELM327(comm: MOCKComm())
         }
@@ -276,10 +343,6 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         }
     }
 
-    //    public func switchToDemoMode(_ isDemoMode: Bool) {
-    //        elm327.switchToDemoMode(isDemoMode)
-    //    }
-
     /// Sends a raw command to the vehicle and returns the raw response.
     /// - Parameter message: The raw command to send.
     /// - Returns: The raw response from the vehicle.
@@ -309,59 +372,6 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             throw OBDServiceError.scanFailed(underlyingError: error)
         }
     }
-
-//    public func test() {
-//        if let resourcePath = Bundle.module.resourcePath {
-//               print("Bundle resources path: \(resourcePath)")
-//               let files = try? FileManager.default.contentsOfDirectory(atPath: resourcePath)
-//               print("Files in bundle: \(files ?? [])")
-//           }
-//        // Get the path for the JSON file within the app's bundle
-//        guard let path = Bundle.module.path(forResource: "commands", ofType: "json") else {
-//            print("Error: commands.json file not found in the bundle.")
-//            return
-//        }
-//
-//        // Load the file data
-//        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
-//            print("Error: Unable to load data from commands.json.")
-//            return
-//        }
-//
-//        do {
-//                // Load the JSON
-//                let data = try Data(contentsOf: URL(fileURLWithPath: path))
-//
-//                // Decode the JSON into an array of dictionaries to handle flexible structures
-//                guard var rawCommands = try JSONSerialization.jsonObject(with: data, options: []) as? [[String: Any]] else {
-//                    print("Error: Invalid JSON format.")
-//                    return
-//                }
-//
-//                // Edit the `decoder` field
-//                rawCommands = rawCommands.map { command in
-//                    var updatedCommand = command
-//                    if let decoder = command["decoder"] as? [String: Any], let firstKey = decoder.keys.first {
-//                        updatedCommand["decoder"] = firstKey // Set the first key as the string value
-//                    } else {
-//                        updatedCommand["decoder"] = "none" // Default to "none" if no keys exist
-//                    }
-//                    return updatedCommand
-//                }
-//
-//                // Convert back to JSON data
-//                let updatedData = try JSONSerialization.data(withJSONObject: rawCommands, options: .prettyPrinted)
-//
-//                // Save the updated JSON to a file
-//                let outputPath = FileManager.default.temporaryDirectory.appendingPathComponent("commands_updated.json")
-//                try updatedData.write(to: outputPath)
-//
-//                print("Modified commands.json saved to: \(outputPath.path)")
-//            } catch {
-//                print("Error processing commands.json: \(error)")
-//            }
-//    }
-
 }
 
 public enum OBDServiceError: Error {

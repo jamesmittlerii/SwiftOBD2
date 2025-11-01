@@ -35,9 +35,23 @@ class WifiManager: CommProtocol {
 
     var tcp: NWConnection?
 
+    // MARK: - Configurable Host/Port
+    private let hostString: String
+    private let portValue: UInt16
+
+    // Default initializer preserves the current hardcoded values
+    convenience init() {
+        self.init(host: "192.168.0.10", port: 35000)
+    }
+
+    init(host: String, port: UInt16) {
+        self.hostString = host
+        self.portValue = port
+    }
+
     func connectAsync(timeout _: TimeInterval, peripheral _: CBPeripheral? = nil) async throws {
-        let host = NWEndpoint.Host("192.168.0.10")
-        guard let port = NWEndpoint.Port("35000") else {
+        let host = NWEndpoint.Host(hostString)
+        guard let port = NWEndpoint.Port(rawValue: portValue) else {
             throw CommunicationError.invalidData
         }
         tcp = NWConnection(host: host, port: port, using: .tcp)
@@ -94,8 +108,8 @@ class WifiManager: CommProtocol {
 
     private func sendAndReceiveData(_ data: Data) async throws -> String {
         guard let tcpConnection = tcp else {
-             throw CommunicationError.invalidData
-         }
+            throw CommunicationError.invalidData
+        }
         let logger = self.logger // Avoid capturing `self` directly
 
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
