@@ -33,13 +33,20 @@ class WifiManager: CommProtocol {
 
     var connectionStatePublisher: Published<ConnectionState>.Publisher { $connectionState }
 
+    private let host: NWEndpoint.Host
+    private let port: NWEndpoint.Port
+
     var tcp: NWConnection?
 
-    func connectAsync(timeout _: TimeInterval, peripheral _: CBPeripheral? = nil) async throws {
-        let host = NWEndpoint.Host("192.168.0.10")
-        guard let port = NWEndpoint.Port("35000") else {
-            throw CommunicationError.invalidData
+    init(host: String, port: UInt16) {
+        self.host = NWEndpoint.Host(host)
+        guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+            fatalError("Invalid port: \(port)")
         }
+        self.port = nwPort
+    }
+
+    func connectAsync(timeout _: TimeInterval, peripheral _: CBPeripheral? = nil) async throws {
         tcp = NWConnection(host: host, port: port, using: .tcp)
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -47,7 +54,7 @@ class WifiManager: CommProtocol {
                 guard let self = self else { return }
                 switch newState {
                 case .ready:
-                    self.logger.info("Connected to \(host.debugDescription):\(port.debugDescription)")
+                    self.logger.info("Connected to \(self.host.debugDescription):\(self.port.debugDescription)")
                     self.connectionState = .connectedToAdapter
                     continuation.resume(returning: ())
                 case let .waiting(error):

@@ -53,6 +53,10 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         }
     }
 
+    /// Optional Wi-Fi configuration
+    private var wifiHost: String?
+    private var wifiPort: UInt16?
+
     /// The internal ELM327 object responsible for direct adapter interaction.
     private var elm327: ELM327
 
@@ -60,11 +64,14 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
 
     /// Initializes the OBDService object.
     ///
-    /// - Parameter connectionType: The desired connection type (default is Bluetooth).
-    ///
-    ///
-    public init(connectionType: ConnectionType = .bluetooth) {
+    /// - Parameters:
+    ///   - connectionType: The desired connection type (default is Bluetooth).
+    ///   - host: Optional Wi‑Fi host to use when `connectionType == .wifi`. Defaults to "192.168.4.207" if not provided.
+    ///   - port: Optional Wi‑Fi port to use when `connectionType == .wifi`. Defaults to 35000 if not provided.
+    public init(connectionType: ConnectionType = .bluetooth, host: String? = nil, port: UInt16? = nil) {
         self.connectionType = connectionType
+        self.wifiHost = host
+        self.wifiPort = port
 #if targetEnvironment(simulator)
         elm327 = ELM327(comm: MOCKComm())
 #else
@@ -73,7 +80,9 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             let bleManager = BLEManager()
             elm327 = ELM327(comm: bleManager)
         case .wifi:
-            elm327 = ELM327(comm: WifiManager())
+            let resolvedHost = host ?? "192.168.0.10"
+            let resolvedPort = port ?? 35000
+            elm327 = ELM327(comm: WifiManager(host: resolvedHost, port: resolvedPort))
         case .demo:
             elm327 = ELM327(comm: MOCKComm())
         }
@@ -154,7 +163,9 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             let bleManager = BLEManager()
             elm327 = ELM327(comm: bleManager)
         case .wifi:
-            elm327 = ELM327(comm: WifiManager())
+            let resolvedHost = wifiHost ?? "192.168.4.207"
+            let resolvedPort = wifiPort ?? 35000
+            elm327 = ELM327(comm: WifiManager(host: resolvedHost, port: resolvedPort))
         case .demo:
             elm327 = ELM327(comm: MOCKComm())
         }
