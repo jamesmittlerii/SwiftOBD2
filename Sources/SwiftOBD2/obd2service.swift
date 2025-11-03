@@ -72,7 +72,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         self.connectionType = connectionType
         self.wifiHost = host
         self.wifiPort = port
-#if targetEnvironment(simulator)
+#if targetEnvironment(simulator) && false
         elm327 = ELM327(comm: MOCKComm())
 #else
         switch connectionType {

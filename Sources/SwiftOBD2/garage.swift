@@ -48,7 +48,7 @@ public class Garage: ObservableObject {
 //        UserDefaults.standard.removeObject(forKey: "currentCarId")
         currentVehicleId = UserDefaults.standard.integer(forKey: "currentCarId")
 
-        #if targetEnvironment(simulator)
+        #if targetEnvironment(simulator) && false
             loadMockGarage()
         #else
             loadGarage()
