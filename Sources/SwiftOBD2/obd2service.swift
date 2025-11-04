@@ -180,7 +180,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     /// - Parameter command: The OBD2 command to send.
     /// - Returns: A publisher with the measurement result.
     /// - Throws: Errors that might occur during the request process.
-    public func startContinuousUpdates(_ pids: [OBDCommand], unit: MeasurementUnit = .metric, interval: TimeInterval = 0.3) -> AnyPublisher<[OBDCommand: MeasurementResult], Error> {
+    public func startContinuousUpdates(_ pids: [OBDCommand], unit: MeasurementUnit = .metric, interval: TimeInterval = 1) -> AnyPublisher<[OBDCommand: MeasurementResult], Error> {
         Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
             .flatMap { [weak self] _ -> Future<[OBDCommand: MeasurementResult], Error> in
