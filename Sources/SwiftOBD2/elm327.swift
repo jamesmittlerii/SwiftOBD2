@@ -466,7 +466,7 @@ struct BatchedResponse {
         let valueData = response.prefix(size)
 
         response.removeFirst(size)
-        //        print("Buffer: \(buffer.compactMap { String(format: "%02X ", $0) }.joined())")
+        //print("Buffer: \(valueData.compactMap { String(format: "%02X ", $0) }.joined())")
         let result = cmd.properties.decode(data: valueData, unit: unit)
 
         
