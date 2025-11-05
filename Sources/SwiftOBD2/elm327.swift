@@ -227,12 +227,34 @@ class ELM327 {
         //        [.ATZ, .ATD, .ATL0, .ATE0, .ATH1, .ATAT1, .ATRV, .ATDPN]
         logger.info("Initializing ELM327 adapter...")
         do {
+            /*
             _ = try await sendCommand("ATZ") // Reset adapter
             _ = try await okResponse("ATE0") // Echo off
             _ = try await okResponse("ATL0") // Linefeeds off
             _ = try await okResponse("ATS0") // Spaces off
             _ = try await okResponse("ATH1") // Headers off
             _ = try await okResponse("ATSP0") // Set protocol to automatic
+             */
+            
+            _ = try await sendCommand("ATZ") // Reset adapter
+            _ = try await okResponse("ATE0") // Echo off
+            //_ = try await okResponse("STI")
+            //_ = try await okResponse("VTI")
+            _ = try await okResponse("ATD")
+            _ = try await okResponse("ATD0")
+            _ = try await okResponse("ATE0")
+            _ = try await okResponse("ATH1")
+            _ = try await okResponse("ATSP6")
+            _ = try await okResponse("ATE0")
+            _ = try await okResponse("ATH1")
+            _ = try await okResponse("ATM0")
+            _ = try await okResponse("ATS0")
+            _ = try await okResponse("ATAT1")
+            _ = try await okResponse("ATAL")
+            _ = try await okResponse("ATST64")
+            
+            
+            
             logger.info("ELM327 adapter initialized successfully.")
         } catch {
             logger.error("Adapter initialization failed: \(error.localizedDescription)")
