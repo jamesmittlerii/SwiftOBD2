@@ -180,7 +180,11 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     /// - Parameter command: The OBD2 command to send.
     /// - Returns: A publisher with the measurement result.
     /// - Throws: Errors that might occur during the request process.
-    public func startContinuousUpdates(_ pids: [OBDCommand], unit: MeasurementUnit = .metric, interval: TimeInterval = 1) -> AnyPublisher<[OBDCommand: MeasurementResult], Error> {
+    public func startContinuousUpdates(
+        _ pids: [OBDCommand],
+        unit: MeasurementUnit = .metric,
+        interval: TimeInterval = 1
+    ) -> AnyPublisher<[OBDCommand: MeasurementResult], Error> {
         Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
             .flatMap { [weak self] _ -> Future<[OBDCommand: MeasurementResult], Error> in
@@ -189,10 +193,20 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
                         promise(.failure(OBDServiceError.notConnectedToVehicle))
                         return
                     }
+
                     Task(priority: .userInitiated) {
                         do {
-                            let results = try await self.requestPIDs(pids, unit: unit)
-                            promise(.success(results))
+                            var aggregatedResults: [OBDCommand: MeasurementResult] = [:]
+
+                            // Sequentially request each PID
+                            for pid in pids {
+                                let singleResult = try await self.requestPIDs([pid], unit: unit)
+                                for (command, value) in singleResult {
+                                    aggregatedResults[command] = value
+                                }
+                            }
+
+                            promise(.success(aggregatedResults))
                         } catch {
                             promise(.failure(error))
                         }

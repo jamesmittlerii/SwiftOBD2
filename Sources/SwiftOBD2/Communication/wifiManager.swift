@@ -75,7 +75,7 @@ class WifiManager: CommProtocol {
         guard let data = "\(command)\r".data(using: .ascii) else {
             throw CommunicationError.invalidData
         }
-        logger.info("Sending: \(command)")
+        //logger.info("Sending: \(command)")
         return try await sendCommandInternal(data: data, retries: retries)
     }
 
@@ -133,7 +133,7 @@ class WifiManager: CommProtocol {
     }
 
     private func processResponse(_ response: String) -> [String]? {
-        logger.info("Processing response: \(response)")
+        //logger.info("Processing response: \(response)")
         var lines = response.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
         guard !lines.isEmpty else {
