@@ -46,8 +46,17 @@ class WifiManager: CommProtocol {
         self.port = nwPort
     }
 
-    func connectAsync(timeout _: TimeInterval, peripheral _: CBPeripheral? = nil) async throws {
-        tcp = NWConnection(host: host, port: port, using: .tcp)
+    func connectAsync(timeout: TimeInterval, peripheral _: CBPeripheral? = nil) async throws {
+        
+        let tcpOptions = NWProtocolTCP.Options.init()
+           
+           // 2. Set the connection timeout in seconds
+        tcpOptions.connectionTimeout = Int(timeout) // e.g., 10 seconds
+           
+           // 3. Create Network parameters and set the customized TCP options
+           let parameters = NWParameters(tls: nil, tcp: tcpOptions)
+           
+        tcp = NWConnection(host: host, port: port, using: parameters)
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             tcp?.stateUpdateHandler = { [weak self] newState in
