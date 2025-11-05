@@ -22,6 +22,7 @@ protocol CommProtocol {
 enum CommunicationError: Error {
     case invalidData
     case errorOccurred(Error)
+    case connectionTimedOut
 }
 
 class WifiManager: CommProtocol {
@@ -45,33 +46,57 @@ class WifiManager: CommProtocol {
         }
         self.port = nwPort
     }
-
-    func connectAsync(timeout: TimeInterval, peripheral _: CBPeripheral? = nil) async throws {
+    
+    func connectAsync(timeout totalTimeout: TimeInterval,peripheral _: CBPeripheral? = nil) async throws {
+        let tcpOptions = NWProtocolTCP.Options()
+        // Set a reasonable individual handshake timeout (e.g., half the total timeout)
+        tcpOptions.connectionTimeout = Int(totalTimeout / 2)
         
-        let tcpOptions = NWProtocolTCP.Options.init()
-           
-           // 2. Set the connection timeout in seconds
-        tcpOptions.connectionTimeout = Int(timeout) // e.g., 10 seconds
-           
-           // 3. Create Network parameters and set the customized TCP options
-           let parameters = NWParameters(tls: nil, tcp: tcpOptions)
-           
+        let parameters = NWParameters(tls: nil, tcp: tcpOptions)
+               
         tcp = NWConnection(host: host, port: port, using: parameters)
 
+        // Use a task group or a manual timer to manage the total timeout
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            var timeoutWorkItem: DispatchWorkItem?
+
+            // Define a function to handle the timeout cancellation
+            let cancelOnTimeout = { [weak self] in
+                guard let self = self else { return }
+                if self.connectionState != .connectedToAdapter {
+                    self.logger.error("Total connection timeout exceeded. Cancelling connection.")
+                    self.connectionState = .disconnected
+                    self.tcp?.cancel()
+                    // Resume with a timeout error if the continuation hasn't already resumed
+                    continuation.resume(throwing: CommunicationError.connectionTimedOut)
+                }
+            }
+            
+            // Schedule the manual timeout
+            timeoutWorkItem = DispatchWorkItem(block: cancelOnTimeout)
+            DispatchQueue.main.asyncAfter(deadline: .now() + totalTimeout, execute: timeoutWorkItem!)
+            
             tcp?.stateUpdateHandler = { [weak self] newState in
                 guard let self = self else { return }
                 switch newState {
                 case .ready:
+                    // If successful, cancel the pending timeout work item
+                    timeoutWorkItem?.cancel()
                     self.logger.info("Connected to \(self.host.debugDescription):\(self.port.debugDescription)")
                     self.connectionState = .connectedToAdapter
                     continuation.resume(returning: ())
-                case let .waiting(error):
-                    self.logger.warning("Connection waiting: \(error.localizedDescription)")
+                    
                 case let .failed(error):
+                    // If failed, cancel the pending timeout work item
+                    timeoutWorkItem?.cancel()
                     self.logger.error("Connection failed: \(error.localizedDescription)")
                     self.connectionState = .disconnected
                     continuation.resume(throwing: CommunicationError.errorOccurred(error))
+                    
+                case let .waiting(error):
+                    // This is the state where you are seeing the ETIMEDOUT message
+                    self.logger.warning("Connection waiting: \(error.localizedDescription)")
+                    
                 default:
                     break
                 }
@@ -79,6 +104,8 @@ class WifiManager: CommProtocol {
             tcp?.start(queue: .main)
         }
     }
+
+   
 
     func sendCommand(_ command: String, retries: Int) async throws -> [String] {
         guard let data = "\(command)\r".data(using: .ascii) else {
