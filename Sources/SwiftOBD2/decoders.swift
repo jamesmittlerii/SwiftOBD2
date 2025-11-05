@@ -767,9 +767,14 @@ func parseDTC(_ data: Data) -> TroubleCode? {
     var dtc = ["P", "C", "B", "U"][Int(first) >> 6] // the last 2 bits of the first byte
     dtc += String((first >> 4) & 0b0011) // the next pair of 2 bits. Mask off the bits we read above
     dtc += String(format: "%04X", (UInt16(first) & 0x3F) << 8 | UInt16(second)).dropFirst()
-    // pull description from the DTCs array
-
-    return TroubleCode(code: dtc, description: codes[dtc] ?? "No description available.")
+    
+    if let troubleCode = codes[dtc] {
+        return troubleCode
+    } else {
+        // The `determineSeverity` function is private to the file that defines `TroubleCode`.
+        // Since we can't access it, we'll use `.moderate` as a sensible default for unknown codes.
+        return TroubleCode(code: dtc, description: "No description available.", severity: .moderate)
+    }
 }
 
 public class Monitor {
