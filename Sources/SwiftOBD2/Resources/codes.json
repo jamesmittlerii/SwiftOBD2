@@ -594,6 +594,90 @@
         "causeIndexes": [8, 9, 36],
         "remedyIndexes": [8, 9, 30]
       },
+      
+      "P0205": {
+             "title": "Injector Circuit/Open – Cylinder 5",
+             "description": "The injector for cylinder 5 is not receiving proper electrical control due to an open or faulty circuit.",
+             "causeIndexes": [8, 9, 36],
+             "remedyIndexes": [8, 9, 30]
+           },
+
+           "P0206": {
+             "title": "Injector Circuit/Open – Cylinder 6",
+             "description": "The injector circuit for cylinder 6 is open or otherwise unable to deliver proper electrical control.",
+             "causeIndexes": [8, 9, 36],
+             "remedyIndexes": [8, 9, 30]
+           },
+
+           "P0207": {
+             "title": "Injector Circuit/Open – Cylinder 7",
+             "description": "Cylinder 7 injector control circuit has an open or malfunctioning electrical path.",
+             "causeIndexes": [8, 9, 36],
+             "remedyIndexes": [8, 9, 30]
+           },
+
+           "P0208": {
+             "title": "Injector Circuit/Open – Cylinder 8",
+             "description": "The injector for cylinder 8 has an open or faulty electrical circuit preventing proper fuel delivery.",
+             "causeIndexes": [8, 9, 36],
+             "remedyIndexes": [8, 9, 30]
+           },
+
+           "P0209": {
+             "title": "Injector Circuit/Open – Cylinder 9",
+             "description": "The injector circuit for cylinder 9 is open or otherwise failing to deliver electrical control.",
+             "causeIndexes": [8, 9, 36],
+             "remedyIndexes": [8, 9, 30]
+           },
+
+           "P0210": {
+             "title": "Injector Circuit/Open – Cylinder 10",
+             "description": "The PCM detects an electrical fault or open circuit in the injector for cylinder 10.",
+             "causeIndexes": [8, 9, 36],
+             "remedyIndexes": [8, 9, 30]
+           },
+
+           "P0211": {
+             "title": "Injector Circuit/Open – Cylinder 11",
+             "description": "The injector for cylinder 11 is not receiving proper electrical control due to a circuit failure.",
+             "causeIndexes": [8, 9, 36],
+             "remedyIndexes": [8, 9, 30]
+           },
+
+           "P0212": {
+             "title": "Injector Circuit/Open – Cylinder 12",
+             "description": "Cylinder 12 injector circuit is open or malfunctioning, preventing proper electrical operation.",
+             "causeIndexes": [8, 9, 36],
+             "remedyIndexes": [8, 9, 30]
+           },
+
+           "P0213": {
+             "title": "Cold Start Injector 1 Circuit Malfunction",
+             "description": "The cold-start injector 1 has an electrical fault preventing proper operation during cold start conditions.",
+             "causeIndexes": [8, 9, 36],
+             "remedyIndexes": [8, 9, 30]
+           },
+
+           "P0214": {
+             "title": "Cold Start Injector 2 Circuit Malfunction",
+             "description": "The PCM detects an electrical failure in the cold-start injector 2 circuit.",
+             "causeIndexes": [8, 9, 36],
+             "remedyIndexes": [8, 9, 30]
+           },
+
+           "P0215": {
+             "title": "Engine Shutoff Solenoid Malfunction",
+             "description": "The engine shutoff solenoid circuit has an electrical or mechanical failure affecting shutdown operation.",
+             "causeIndexes": [8, 9, 36],
+             "remedyIndexes": [8, 9, 30]
+           },
+
+           "P0216": {
+             "title": "Injection Timing Control Circuit Malfunction",
+             "description": "The PCM detects an electrical fault in the injection timing control circuit that affects fuel delivery timing.",
+             "causeIndexes": [8, 9, 29],
+             "remedyIndexes": [8, 9, 25]
+           },
 
       "P0217": {
         "title": "Engine Overtemperature Condition",
