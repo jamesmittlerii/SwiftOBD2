@@ -107,7 +107,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     /// - Parameter preferedProtocol: The optional OBD2 protocol to use (if supported).
     /// - Returns: Information about the connected vehicle (`OBDInfo`).
     /// - Throws: Errors that might occur during the connection process.
-    public func startConnection(preferedProtocol: PROTOCOL? = nil, timeout: TimeInterval = 7) async throws -> OBDInfo {
+    public func startConnection(preferedProtocol: PROTOCOL? = nil, timeout: TimeInterval = 30, querySupportedPIDs: Bool = true) async throws -> OBDInfo {
         let startTime = CFAbsoluteTimeGetCurrent()
         obdInfo("Starting connection with timeout: \(timeout)s", category: .connection)
         
@@ -119,7 +119,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             try await elm327.adapterInitialization()
             
             obdDebug("Initializing vehicle connection...", category: .connection)
-            let vehicleInfo = try await initializeVehicle(preferedProtocol)
+            let vehicleInfo = try await initializeVehicle(preferedProtocol, querySupportedPIDs: querySupportedPIDs)
 
             let duration = CFAbsoluteTimeGetCurrent() - startTime
             OBDLogger.shared.logPerformance("Connection established", duration: duration, success: true)
@@ -139,8 +139,8 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     /// - Parameter preferedProtocol: The optional OBD2 protocol to use (if supported).
     /// - Returns: Information about the connected vehicle (`OBDInfo`).
     /// - Throws: Errors if the vehicle initialization process fails.
-    func initializeVehicle(_ preferedProtocol: PROTOCOL?) async throws -> OBDInfo {
-        let obd2info = try await elm327.setupVehicle(preferredProtocol: preferedProtocol)
+    func initializeVehicle(_ preferedProtocol: PROTOCOL?, querySupportedPIDs: Bool = true) async throws -> OBDInfo {
+        let obd2info = try await elm327.setupVehicle(preferredProtocol: preferedProtocol, querySupportedPIDs: querySupportedPIDs)
         return obd2info
     }
 

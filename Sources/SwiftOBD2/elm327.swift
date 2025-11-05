@@ -103,7 +103,7 @@ class ELM327 {
     ///     - `SetupError.peripheralNotFound` if the peripheral could not be found.
     ///     - `SetupError.ignitionOff` if the vehicle's ignition is not on.
     ///     - `SetupError.invalidProtocol` if the protocol is not recognized.
-    func setupVehicle(preferredProtocol: PROTOCOL?) async throws -> OBDInfo {
+    func setupVehicle(preferredProtocol: PROTOCOL?, querySupportedPIDs: Bool = true) async throws -> OBDInfo {
         //        var obdProtocol: PROTOCOL?
         let detectedProtocol = try await detectProtocol(preferredProtocol: preferredProtocol)
 
@@ -118,13 +118,19 @@ class ELM327 {
 
         //        try await setHeader(header: "7E0")
 
-        let supportedPIDs = await getSupportedPIDs()
+        var supportedPIDs: [OBDCommand]? = nil
+        var ecuMap: [UInt8: ECUID]? = nil
+        
+        if (querySupportedPIDs)
+        {
+        supportedPIDs = await getSupportedPIDs()
 
         guard let messages = try canProtocol?.parse(r100) else {
             throw ELM327Error.invalidResponse(message: "Invalid response to 0100")
         }
 
-        let ecuMap = populateECUMap(messages)
+        ecuMap = populateECUMap(messages)
+        }
 
         connectionState = .connectedToVehicle
         return OBDInfo(vin: vin, supportedPIDs: supportedPIDs, obdProtocol: detectedProtocol, ecuMap: ecuMap)
@@ -237,6 +243,7 @@ class ELM327 {
              */
             
             _ = try await sendCommand("ATZ") // Reset adapter
+            sleep(1)
             _ = try await okResponse("ATE0") // Echo off
             //_ = try await okResponse("STI")
             //_ = try await okResponse("VTI")

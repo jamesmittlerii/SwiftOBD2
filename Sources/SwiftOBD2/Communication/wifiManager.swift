@@ -111,7 +111,7 @@ class WifiManager: CommProtocol {
         guard let data = "\(command)\r".data(using: .ascii) else {
             throw CommunicationError.invalidData
         }
-        //logger.info("Sending: \(command)")
+        logger.debug("Sending: \(command)")
         return try await sendCommandInternal(data: data, retries: retries)
     }
 
@@ -162,6 +162,7 @@ class WifiManager: CommProtocol {
                         return
                     }
 
+                    logger.debug("device response: \(responseString)")
                     continuation.resume(returning: responseString)
                 }
             })
