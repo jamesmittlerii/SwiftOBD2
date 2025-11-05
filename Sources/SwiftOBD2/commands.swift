@@ -23,8 +23,8 @@ public extension DecodeResult {
         return nil
     }
 
-    var troubleCode: [TroubleCode]? {
-        if case let .troubleCode(res) = self { return res as [TroubleCode] }
+    var troubleCode: [TroubleCodeMetadata]? {
+        if case let .troubleCode(res) = self { return res as [TroubleCodeMetadata] }
         return nil
     }
 

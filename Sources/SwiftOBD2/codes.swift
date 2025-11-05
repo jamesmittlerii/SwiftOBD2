@@ -15,6 +15,14 @@ public enum Severity: String, Codable, Hashable, CaseIterable {
 }
 
 public struct TroubleCode: Codable, Hashable, Comparable {
+    
+    public init(code: String, description: String, severity: Severity = .moderate) {
+        self.code = code
+        self.description = description
+        self.severity = severity
+    }
+    
+    
     public static func < (lhs: TroubleCode, rhs: TroubleCode) -> Bool {
         lhs.code < rhs.code
     }

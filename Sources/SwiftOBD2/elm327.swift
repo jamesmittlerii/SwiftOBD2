@@ -276,8 +276,8 @@ class ELM327 {
         return statusCommand.properties.decode(data: statusData)
     }
 
-    func scanForTroubleCodes() async throws -> [ECUID: [TroubleCode]] {
-        var dtcs: [ECUID: [TroubleCode]] = [:]
+    func scanForTroubleCodes() async throws -> [ECUID: [TroubleCodeMetadata]] {
+        var dtcs: [ECUID: [TroubleCodeMetadata]] = [:]
         logger.info("Scanning for trouble codes")
         let dtcCommand = OBDCommand.Mode3.GET_DTC
         let dtcResponse = try await sendCommand(dtcCommand.properties.command)

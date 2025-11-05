@@ -18,7 +18,7 @@ public struct Vehicle: Codable, Identifiable, Equatable, Hashable {
     public var model: String
     public var year: String
     public var status: Status?
-    public var troubleCodes: [ECUID: [TroubleCode]]?
+    public var troubleCodes: [ECUID: [TroubleCodeMetadata]]?
     public var obdinfo: OBDInfo?
 }
 

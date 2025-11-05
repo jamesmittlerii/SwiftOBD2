@@ -228,7 +228,7 @@ public enum DecodeResult {
     case stringResult(String)
     case statusResult(Status)
     case measurementResult(MeasurementResult)
-    case troubleCode([TroubleCode])
+    case troubleCode([TroubleCodeMetadata])
     case measurementMonitor(Monitor)
 }
 
@@ -407,7 +407,7 @@ struct DTCDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         // converts a frame of 2-byte DTCs into a list of DTCs
         let data = Data(data)
-        var codes: [TroubleCode] = []
+        var codes: [TroubleCodeMetadata] = []
         // send data to parceDtc 2 byte at a time
         for n in stride(from: 0, to: data.count - 1, by: 2) {
             let endIndex = min(n + 1, data.count - 1)
@@ -752,7 +752,7 @@ struct StatusDecoder: Decoder {
     }
 }
 
-func parseDTC(_ data: Data) -> TroubleCode? {
+func parseDTC(_ data: Data) -> TroubleCodeMetadata? {
     if (data.count != 2) || (data == Data([0x00, 0x00])) {
         return nil
     }
@@ -768,12 +768,12 @@ func parseDTC(_ data: Data) -> TroubleCode? {
     dtc += String((first >> 4) & 0b0011) // the next pair of 2 bits. Mask off the bits we read above
     dtc += String(format: "%04X", (UInt16(first) & 0x3F) << 8 | UInt16(second)).dropFirst()
     
-    if let troubleCode = codes[dtc] {
+    if let troubleCode = troubleCodeDictionary[dtc] {
         return troubleCode
     } else {
         // The `determineSeverity` function is private to the file that defines `TroubleCode`.
         // Since we can't access it, we'll use `.moderate` as a sensible default for unknown codes.
-        return TroubleCode(code: dtc, description: "No description available.", severity: .moderate)
+        return TroubleCodeMetadata(code: dtc,title: "none",description: "No description available.",severity: .moderate, causes: [], remedies: [] )
     }
 }
 

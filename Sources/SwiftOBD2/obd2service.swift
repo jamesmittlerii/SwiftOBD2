@@ -271,7 +271,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     ///  Scans for trouble codes and returns the result.
     ///  - Returns: The trouble codes found on the vehicle.
     ///  - Throws: Errors that might occur during the request process.
-    public func scanForTroubleCodes() async throws -> [ECUID: [TroubleCode]] {
+    public func scanForTroubleCodes() async throws -> [ECUID: [TroubleCodeMetadata]] {
         do {
             return try await elm327.scanForTroubleCodes()
         } catch {

@@ -1,0 +1,784 @@
+{
+  "causes": [
+    "Vacuum leak",
+    "Dirty MAF sensor",
+    "Faulty MAF sensor",
+    "Air intake duct leak",
+    "Clogged air filter",
+    "Exhaust leak before O2 sensor",
+    "Failed oxygen sensor",
+    "O2 sensor heater failure",
+    "Open or shorted sensor wiring",
+    "Corroded or loose electrical connector",
+    "Low fuel pressure",
+    "Weak fuel pump",
+    "Clogged fuel filter",
+    "Leaking fuel injector",
+    "Stuck-open purge valve",
+    "Stuck-closed purge valve",
+    "EVAP system hose leak",
+    "Loose or faulty gas cap",
+    "Cracked EVAP hose",
+    "Faulty charcoal canister",
+    "Faulty purge control solenoid",
+    "Faulty vent valve",
+    "Stuck-open thermostat",
+    "Low coolant level",
+    "Faulty coolant temperature sensor",
+    "Engine oil too low",
+    "Dirty or degraded engine oil",
+    "Sludged VVT passages",
+    "Faulty VVT solenoid",
+    "Timing chain stretch",
+    "Timing belt wear or skip",
+    "Failed camshaft position sensor",
+    "Failed crankshaft position sensor",
+    "Misfiring spark plug",
+    "Failed ignition coil",
+    "Worn ignition wires",
+    "Clogged fuel injector",
+    "Engine coolant temperature out of range",
+    "Battery voltage too low",
+    "Alternator failure or low charging voltage",
+    "Torque converter clutch failure",
+    "Transmission fluid low",
+    "Transmission internal mechanical failure",
+    "Transmission solenoid failure",
+    "Faulty output speed sensor",
+    "Faulty input speed sensor",
+    "Damaged reluctor wheel",
+    "Catalytic converter failure",
+    "Contaminated catalytic converter",
+    "Aging O2 sensors",
+    "PCM/ECM internal driver failure",
+    "Short to power",
+    "Short to ground",
+    "Open circuit",
+    "MAP sensor failure",
+    "Fuel pressure regulator failure",
+    "EGR valve stuck open",
+    "EGR valve stuck closed",
+    "Blocked EGR passages",
+    "Boost control solenoid failure",
+    "Turbo wastegate stuck",
+    "Intercooler leak",
+    "Restricted exhaust system",
+    "Secondary air pump failure",
+    "Secondary air valve stuck",
+    "ABS wheel speed sensor failure",
+    "Damaged tone ring",
+    "Steering angle sensor failure",
+    "Throttle body carbon buildup",
+    "Electronic throttle control failure",
+    "Accelerator pedal position sensor failure",
+    "Intake manifold gasket leak",
+    "Cylinder compression loss",
+    "Head gasket failure",
+    "Engine overheating",
+    "Fuel contamination (water or debris)",
+    "PCV valve stuck open",
+    "PCV valve stuck closed"
+  ],
+  "remedies": [
+      "Repair vacuum leaks",
+      "Clean MAF sensor",
+      "Replace MAF sensor",
+      "Repair air intake duct leaks",
+      "Replace air filter",
+      "Repair exhaust leaks",
+      "Replace oxygen sensor",
+      "Replace O2 sensor heater",
+      "Repair or replace sensor wiring",
+      "Clean electrical connectors",
+      "Test fuel pressure",
+      "Replace fuel pump",
+      "Replace fuel filter",
+      "Replace or service fuel injectors",
+      "Replace purge valve",
+      "Replace vent valve",
+      "Repair EVAP system leaks",
+      "Replace gas cap",
+      "Replace charcoal canister",
+      "Replace coolant thermostat",
+      "Add coolant and pressure-test for leaks",
+      "Replace coolant temperature sensor",
+      "Change engine oil and filter",
+      "Clean VVT screens and passages",
+      "Replace VVT solenoid",
+      "Repair or replace timing components",
+      "Replace camshaft position sensor",
+      "Replace crankshaft position sensor",
+      "Replace spark plugs",
+      "Replace ignition coil",
+      "Replace ignition wires",
+      "Clean or replace clogged injectors",
+      "Replace catalytic converter",
+      "Replace O2 sensors (front and rear as needed)",
+      "Diagnose and repair PCM driver fault",
+      "Repair short-to-power",
+      "Repair short-to-ground",
+      "Repair open circuit",
+      "Replace MAP sensor",
+      "Replace fuel pressure regulator",
+      "Clean or replace EGR valve",
+      "Clean EGR passages",
+      "Replace boost control solenoid",
+      "Repair turbo wastegate",
+      "Repair intercooler or charge pipe leaks",
+      "Repair or replace restricted exhaust components",
+      "Replace secondary air pump",
+      "Replace secondary air valve",
+      "Replace ABS wheel speed sensor",
+      "Replace tone ring",
+      "Replace steering angle sensor",
+      "Clean throttle body",
+      "Replace throttle body",
+      "Replace accelerator pedal sensor",
+      "Replace intake manifold gasket",
+      "Perform compression test and repair cylinder leakage",
+      "Replace head gasket",
+      "Diagnose and repair overheating",
+      "Drain contaminated fuel",
+      "Replace PCV valve"
+    ],
+  "codes": {
+      "P0001": {
+          "title": "Fuel Volume Regulator Control Circuit/Open",
+          "description": "The PCM has detected an open circuit in the fuel volume regulator control circuit, which disrupts fuel pressure management and can cause hard starting or lean conditions.",
+          "causeIndexes": [8, 9, 11],
+          "remedyIndexes": [8, 9, 11]
+      },
+      
+      "P0002": {
+          "title": "Fuel Volume Regulator Control Circuit Range/Performance",
+          "description": "The fuel volume regulator is not performing within expected parameters, affecting pressure control and overall fuel delivery.",
+          "causeIndexes": [11, 12, 29, 50],
+          "remedyIndexes": [10, 11, 24]
+      },
+      
+      "P0003": {
+          "title": "Fuel Volume Regulator Control Circuit Low",
+          "description": "The control circuit voltage for the fuel volume regulator is lower than expected, usually due to shorts or excessive resistance.",
+          "causeIndexes": [52, 53, 8],
+          "remedyIndexes": [36, 37, 38]
+      },
+      
+      "P0004": {
+          "title": "Fuel Volume Regulator Control Circuit High",
+          "description": "The control circuit for the fuel volume regulator has higher than expected voltage, often caused by a short to power.",
+          "causeIndexes": [52, 8],
+          "remedyIndexes": [36, 8]
+      },
+      
+      "P0010": {
+          "title": "A Camshaft Position Actuator Circuit/Open (Bank 1)",
+          "description": "The intake camshaft actuator solenoid circuit is open, causing improper valve timing control.",
+          "causeIndexes": [8, 29, 27],
+          "remedyIndexes": [8, 24, 25]
+      },
+      
+      "P0011": {
+          "title": "A Camshaft Timing Over-Advanced (Bank 1)",
+          "description": "The intake camshaft is in a more advanced position than the PCM commands, usually due to oil flow or VVT issues.",
+          "causeIndexes": [27, 26, 28, 29],
+          "remedyIndexes": [22, 23, 25, 26]
+      },
+      
+      "P0012": {
+          "title": "A Camshaft Timing Over-Retarded (Bank 1)",
+          "description": "The intake camshaft timing is excessively retarded compared to the commanded position.",
+          "causeIndexes": [26, 27, 29],
+          "remedyIndexes": [22, 25, 26]
+      },
+      
+      "P0013": {
+          "title": "B Camshaft Position Actuator Circuit/Open (Bank 1)",
+          "description": "The exhaust cam actuator solenoid circuit for bank 1 has an open or invalid electrical condition.",
+          "causeIndexes": [8, 29, 50],
+          "remedyIndexes": [8, 25, 35]
+      },
+      
+      "P0014": {
+          "title": "B Camshaft Position Timing Over-Advanced (Bank 1)",
+          "description": "The exhaust camshaft is over-advanced, typically due to a sticking actuator or oil management issue.",
+          "causeIndexes": [27, 26, 29],
+          "remedyIndexes": [22, 25, 26]
+      },
+      
+      "P0016": {
+          "title": "Crankshaft/Camshaft Position Correlation (Bank 1 Sensor A)",
+          "description": "The crankshaft and camshaft positions do not correlate correctly, indicating mechanical timing issues.",
+          "causeIndexes": [29, 30, 31, 32],
+          "remedyIndexes": [26, 30, 31]
+      },
+      
+      "P0017": {
+          "title": "Crankshaft/Camshaft Position Correlation (Bank 1 Sensor B)",
+          "description": "The exhaust camshaft and crankshaft alignment is outside the allowable range.",
+          "causeIndexes": [29, 30, 31, 32],
+          "remedyIndexes": [26, 30, 31]
+      },
+      
+      "P0020": {
+          "title": "A Camshaft Position Actuator Circuit (Bank 2)",
+          "description": "The intake camshaft actuator on bank 2 has an electrical circuit failure.",
+          "causeIndexes": [8, 29, 50],
+          "remedyIndexes": [8, 25, 35]
+      },
+      
+      "P0021": {
+          "title": "A Camshaft Timing Over-Advanced (Bank 2)",
+          "description": "The intake camshaft on bank 2 is more advanced than commanded, usually due to VVT or oil flow issues.",
+          "causeIndexes": [27, 26, 29],
+          "remedyIndexes": [22, 25, 26]
+      },
+      "P0022": {
+        "title": "A Camshaft Timing Over-Retarded (Bank 2)",
+        "description": "The intake camshaft timing on bank 2 is excessively retarded relative to PCM command, usually caused by oil flow problems or VVT actuator sticking.",
+        "causeIndexes": [26, 27, 29],
+        "remedyIndexes": [22, 25, 26]
+      },
+
+      "P0023": {
+        "title": "B Camshaft Position Actuator Circuit (Bank 2)",
+        "description": "The exhaust camshaft actuator circuit for bank 2 has an electrical fault causing incorrect valve timing control.",
+        "causeIndexes": [8, 29, 50],
+        "remedyIndexes": [8, 25, 35]
+      },
+
+      "P0024": {
+        "title": "B Camshaft Timing Over-Advanced (Bank 2)",
+        "description": "The exhaust camshaft on bank 2 is more advanced than the PCM commands, often due to sludge or actuator sticking.",
+        "causeIndexes": [27, 26, 29],
+        "remedyIndexes": [22, 25, 26]
+      },
+
+      "P0030": {
+        "title": "HO2S Heater Control Circuit (Bank 1 Sensor 1)",
+        "description": "The heater circuit in the upstream oxygen sensor is not drawing proper current, delaying closed-loop operation.",
+        "causeIndexes": [7, 8, 9],
+        "remedyIndexes": [7, 8, 9]
+      },
+
+      "P0031": {
+        "title": "HO2S Heater Circuit Low (Bank 1 Sensor 1)",
+        "description": "The upstream O2 sensor heater current is lower than expected due to open circuits or heater failure.",
+        "causeIndexes": [8, 53],
+        "remedyIndexes": [8, 37]
+      },
+
+      "P0032": {
+        "title": "HO2S Heater Circuit High (Bank 1 Sensor 1)",
+        "description": "Excessive current in the heater circuit of the upstream O2 sensor, usually from a short to power.",
+        "causeIndexes": [52, 7],
+        "remedyIndexes": [36, 7]
+      },
+
+      "P0037": {
+        "title": "HO2S Heater Circuit Low (Bank 1 Sensor 2)",
+        "description": "Downstream oxygen sensor heater current is lower than expected.",
+        "causeIndexes": [7, 8],
+        "remedyIndexes": [7, 8]
+      },
+
+      "P0038": {
+        "title": "HO2S Heater Circuit High (Bank 1 Sensor 2)",
+        "description": "The rear oxygen sensor heater is drawing too much current.",
+        "causeIndexes": [52, 7],
+        "remedyIndexes": [36, 7]
+      },
+
+      "P0100": {
+        "title": "MAF Sensor Circuit Malfunction",
+        "description": "A general electrical fault in the mass airflow sensor circuit resulting in incorrect airflow readings.",
+        "causeIndexes": [2, 8, 9],
+        "remedyIndexes": [2, 8, 9]
+      },
+
+      "P0101": {
+        "title": "MAF Sensor Range/Performance",
+        "description": "The MAF reading is outside the expected range for operating conditions.",
+        "causeIndexes": [0, 1, 3, 4],
+        "remedyIndexes": [0, 1, 3, 4]
+      },
+
+      "P0102": {
+        "title": "MAF Sensor Low Input",
+        "description": "The MAF sensor signal voltage is too low, indicating restricted airflow or sensor/wiring fault.",
+        "causeIndexes": [1, 8, 9],
+        "remedyIndexes": [1, 8, 9]
+      },
+
+      "P0103": {
+        "title": "MAF Sensor High Input",
+        "description": "The MAF output voltage is higher than expected, often due to an electrical short or unmetered air.",
+        "causeIndexes": [52, 3],
+        "remedyIndexes": [36, 3]
+      },
+
+      "P0104": {
+        "title": "MAF Sensor Intermittent",
+        "description": "The PCM detects an intermittent or unstable airflow reading.",
+        "causeIndexes": [9, 8, 2],
+        "remedyIndexes": [9, 8, 2]
+      },
+
+      "P0110": {
+        "title": "Intake Air Temperature Sensor Circuit Malfunction",
+        "description": "The IAT sensor is providing invalid temperature readings due to sensor or wiring faults.",
+        "causeIndexes": [8, 9],
+        "remedyIndexes": [8, 9]
+      },
+
+      "P0112": {
+        "title": "IAT Sensor Low Input",
+        "description": "The IAT sensor voltage is low, indicating an extremely hot air temperature signal.",
+        "causeIndexes": [53, 8],
+        "remedyIndexes": [37, 8]
+      },
+
+      "P0113": {
+        "title": "IAT Sensor High Input",
+        "description": "The IAT sensor voltage is high, showing an extremely cold temperature reading.",
+        "causeIndexes": [8, 54],
+        "remedyIndexes": [8, 38]
+      },
+
+      "P0115": {
+        "title": "ECT Sensor Circuit Malfunction",
+        "description": "The engine coolant temperature sensor circuit has a general fault affecting temperature readings.",
+        "causeIndexes": [8, 25],
+        "remedyIndexes": [8, 21]
+      },
+
+      "P0117": {
+        "title": "ECT Sensor Low Input",
+        "description": "The ECT sensor voltage is lower than expected, indicating an abnormally hot signal.",
+        "causeIndexes": [53, 25],
+        "remedyIndexes": [37, 21]
+      },
+
+      "P0118": {
+        "title": "ECT Sensor High Input",
+        "description": "The ECT sensor voltage is high, indicating an abnormally cold temperature signal.",
+        "causeIndexes": [8, 25],
+        "remedyIndexes": [8, 21]
+      },
+
+      "P0128": {
+        "title": "Coolant Thermostat Below Regulating Temperature",
+        "description": "The engine is not warming up to the expected temperature quickly enough.",
+        "causeIndexes": [22, 23],
+        "remedyIndexes": [19, 20]
+      },
+
+      "P0130": {
+        "title": "O2 Sensor Circuit Malfunction (Bank 1 Sensor 1)",
+        "description": "The upstream O2 sensor is not providing valid feedback to the PCM.",
+        "causeIndexes": [6, 8, 9],
+        "remedyIndexes": [6, 8, 9]
+      },
+
+      "P0131": {
+        "title": "O2 Sensor Low Voltage (Bank 1 Sensor 1)",
+        "description": "A persistently lean signal from the upstream O2 sensor.",
+        "causeIndexes": [0, 10, 6],
+        "remedyIndexes": [0, 10, 6]
+      },
+
+      "P0132": {
+        "title": "O2 Sensor High Voltage (Bank 1 Sensor 1)",
+        "description": "A rich signal from the upstream sensor beyond normal values.",
+        "causeIndexes": [13, 11, 6],
+        "remedyIndexes": [13, 11, 6]
+      },
+
+      "P0133": {
+        "title": "O2 Sensor Slow Response (Bank 1 Sensor 1)",
+        "description": "The O2 sensor is switching slower than expected due to aging or contamination.",
+        "causeIndexes": [50, 6],
+        "remedyIndexes": [34, 6]
+      },
+
+      "P0134": {
+        "title": "O2 Sensor No Activity Detected (Bank 1 Sensor 1)",
+        "description": "The upstream O2 sensor shows no measurable activity.",
+        "causeIndexes": [6, 8, 9],
+        "remedyIndexes": [6, 8, 9]
+      },
+
+      "P0135": {
+        "title": "O2 Sensor Heater Circuit Malfunction (Bank 1 Sensor 1)",
+        "description": "The heater element of the upstream O2 sensor is not functioning correctly.",
+        "causeIndexes": [7, 8, 9],
+        "remedyIndexes": [7, 8, 9]
+      },
+
+      "P0140": {
+        "title": "O2 Sensor No Activity (Bank 1 Sensor 2)",
+        "description": "The downstream oxygen sensor shows no switching activity.",
+        "causeIndexes": [6, 8, 9],
+        "remedyIndexes": [6, 8, 9]
+      },
+
+      "P0141": {
+        "title": "O2 Sensor Heater Circuit Malfunction (Bank 1 Sensor 2)",
+        "description": "The heater in the rear O2 sensor is not operating correctly.",
+        "causeIndexes": [7, 8],
+        "remedyIndexes": [7, 8]
+      },
+
+      "P0150": {
+        "title": "O2 Sensor Circuit Malfunction (Bank 2 Sensor 1)",
+        "description": "The Bank 2 upstream oxygen sensor circuit is malfunctioning.",
+        "causeIndexes": [6, 8, 9],
+        "remedyIndexes": [6, 8, 9]
+      },
+
+      "P0155": {
+        "title": "O2 Sensor Heater Circuit Malfunction (Bank 2 Sensor 1)",
+        "description": "The heater circuit for the Bank 2 upstream O2 sensor is faulty.",
+        "causeIndexes": [7, 8, 9],
+        "remedyIndexes": [7, 8, 9]
+      },
+
+      "P0161": {
+        "title": "O2 Sensor Heater Circuit Malfunction (Bank 2 Sensor 2)",
+        "description": "The downstream O2 sensor heater on Bank 2 has insufficient or excessive current.",
+        "causeIndexes": [7, 8],
+        "remedyIndexes": [7, 8]
+      },
+
+      "P0170": {
+        "title": "Fuel Trim Malfunction (Bank 1)",
+        "description": "Fuel trim adjustments have reached their limits on Bank 1.",
+        "causeIndexes": [0, 1, 10, 11, 12],
+        "remedyIndexes": [0, 1, 10, 11]
+      },
+
+      "P0171": {
+        "title": "System Too Lean (Bank 1)",
+        "description": "The Bank 1 mixture is too lean, generally from unmetered air or low fuel.",
+        "causeIndexes": [0, 1, 10, 11, 12, 5],
+        "remedyIndexes": [0, 1, 10, 11, 5]
+      },
+
+      "P0172": {
+        "title": "System Too Rich (Bank 1)",
+        "description": "Bank 1 has an overly rich air-fuel mixture.",
+        "causeIndexes": [13, 11, 6, 14],
+        "remedyIndexes": [13, 11, 6, 14]
+      },
+
+      "P0174": {
+        "title": "System Too Lean (Bank 2)",
+        "description": "Bank 2 is running lean due to air leaks or insufficient fuel.",
+        "causeIndexes": [0, 1, 10, 11, 12],
+        "remedyIndexes": [0, 1, 10, 11]
+      },
+
+      "P0175": {
+        "title": "System Too Rich (Bank 2)",
+        "description": "The Bank 2 mixture is excessively rich.",
+        "causeIndexes": [13, 11, 6],
+        "remedyIndexes": [13, 11, 6]
+      },
+
+      "P0180": {
+        "title": "Fuel Temperature Sensor A Circuit",
+        "description": "The fuel temperature sensor signal is abnormal or out of range.",
+        "causeIndexes": [8, 9],
+        "remedyIndexes": [8, 9]
+      },
+
+      "P0183": {
+        "title": "Fuel Temperature Sensor A Circuit High",
+        "description": "The fuel temperature sensor voltage is too high, indicating a cold reading.",
+        "causeIndexes": [54, 8],
+        "remedyIndexes": [38, 8]
+      },
+
+      "P0185": {
+        "title": "Fuel Temperature Sensor B Circuit",
+        "description": "The secondary fuel temperature sensor is providing invalid readings.",
+        "causeIndexes": [8, 9],
+        "remedyIndexes": [8, 9]
+      },
+
+      "P0188": {
+        "title": "Fuel Temperature Sensor B Circuit High",
+        "description": "The secondary fuel temperature sensor voltage is too high.",
+        "causeIndexes": [54, 8],
+        "remedyIndexes": [38, 8]
+      },
+
+      "P0190": {
+        "title": "Fuel Rail Pressure Sensor Circuit",
+        "description": "The fuel rail pressure sensor signal is invalid or outside expected range.",
+        "causeIndexes": [8, 9, 11],
+        "remedyIndexes": [8, 9, 11]
+      },
+
+      "P0191": {
+        "title": "Fuel Rail Pressure Range/Performance",
+        "description": "The fuel pressure reading does not match commanded pressure under load.",
+        "causeIndexes": [11, 12, 56, 29],
+        "remedyIndexes": [10, 11, 40]
+      },
+
+      "P0193": {
+        "title": "Fuel Rail Pressure Sensor High Input",
+        "description": "The fuel rail pressure sensor signal is higher than expected.",
+        "causeIndexes": [52, 11],
+        "remedyIndexes": [36, 11]
+      },
+
+      "P0195": {
+        "title": "Engine Oil Temperature Sensor Malfunction",
+        "description": "The PCM detects an invalid or missing signal from the engine oil temperature sensor.",
+        "causeIndexes": [8, 9, 26],
+        "remedyIndexes": [8, 9, 22]
+      },
+
+      "P0197": {
+        "title": "Engine Oil Temperature Sensor Low Input",
+        "description": "The engine oil temperature sensor voltage is low, indicating an abnormally hot oil temperature.",
+        "causeIndexes": [53, 26],
+        "remedyIndexes": [37, 22]
+      },
+
+      "P0198": {
+        "title": "Engine Oil Temperature Sensor High Input",
+        "description": "The EOT sensor voltage is high, indicating a cold sensor reading.",
+        "causeIndexes": [54, 26],
+        "remedyIndexes": [38, 22]
+      },
+
+      "P0199": {
+        "title": "Engine Oil Temperature Sensor Intermittent",
+        "description": "The PCM detects intermittent EOT sensor readings caused by wiring or sensor failure.",
+        "causeIndexes": [9, 8, 26],
+        "remedyIndexes": [9, 8, 22]
+      },
+      "P0200": {
+        "title": "Injector Circuit Malfunction",
+        "description": "The PCM detects an electrical fault in one or more fuel injector circuits.",
+        "causeIndexes": [8, 9, 36, 37],
+        "remedyIndexes": [8, 9, 30, 36]
+      },
+
+      "P0201": {
+        "title": "Injector Circuit/Open – Cylinder 1",
+        "description": "The fuel injector for cylinder 1 has an open or faulty circuit.",
+        "causeIndexes": [8, 9, 36],
+        "remedyIndexes": [8, 9, 30]
+      },
+
+      "P0202": {
+        "title": "Injector Circuit/Open – Cylinder 2",
+        "description": "The fuel injector for cylinder 2 is not operating due to a circuit fault.",
+        "causeIndexes": [8, 9, 36],
+        "remedyIndexes": [8, 9, 30]
+      },
+
+      "P0203": {
+        "title": "Injector Circuit/Open – Cylinder 3",
+        "description": "Cylinder 3 injector electrical circuit is open or failing.",
+        "causeIndexes": [8, 9, 36],
+        "remedyIndexes": [8, 9, 30]
+      },
+
+      "P0204": {
+        "title": "Injector Circuit/Open – Cylinder 4",
+        "description": "The injector for cylinder 4 is not receiving proper electrical control.",
+        "causeIndexes": [8, 9, 36],
+        "remedyIndexes": [8, 9, 30]
+      },
+
+      "P0217": {
+        "title": "Engine Overtemperature Condition",
+        "description": "The PCM detects that the engine coolant temperature has exceeded safe limits.",
+        "causeIndexes": [72, 23, 24],
+        "remedyIndexes": [59, 20, 19]
+      },
+
+      "P0221": {
+        "title": "Throttle/Pedal Position Sensor Range/Performance",
+        "description": "The throttle or pedal position sensor signal is outside the normal operating range.",
+        "causeIndexes": [71, 69, 8],
+        "remedyIndexes": [54, 55, 8]
+      },
+
+      "P0300": {
+        "title": "Random/Multiple Cylinder Misfire",
+        "description": "Multiple cylinders are misfiring without a consistent pattern, often due to ignition, fuel, or vacuum issues.",
+        "causeIndexes": [0, 10, 11, 33, 34, 35, 36, 37],
+        "remedyIndexes": [0, 10, 11, 28, 29, 31]
+      },
+
+      "P0301": {
+        "title": "Cylinder 1 Misfire",
+        "description": "Cylinder 1 is misfiring due to ignition, fuel delivery, or compression issues.",
+        "causeIndexes": [33, 34, 35, 36, 75],
+        "remedyIndexes": [28, 29, 31, 56]
+      },
+
+      "P0302": {
+        "title": "Cylinder 2 Misfire",
+        "description": "Cylinder 2 misfire caused by ignition, fuel, or compression problems.",
+        "causeIndexes": [33, 34, 35, 36, 75],
+        "remedyIndexes": [28, 29, 31, 56]
+      },
+
+      "P0303": {
+        "title": "Cylinder 3 Misfire",
+        "description": "Cylinder 3 is not firing correctly based on PCM monitoring.",
+        "causeIndexes": [33, 34, 35, 36, 75],
+        "remedyIndexes": [28, 29, 31, 56]
+      },
+
+      "P0304": {
+        "title": "Cylinder 4 Misfire",
+        "description": "Cylinder 4 misfire, often from ignition or fuel issues.",
+        "causeIndexes": [33, 34, 35, 36, 75],
+        "remedyIndexes": [28, 29, 31, 56]
+      },
+
+      "P0305": {
+        "title": "Cylinder 5 Misfire",
+        "description": "Cylinder 5 misfire detected.",
+        "causeIndexes": [33, 34, 35, 36, 75],
+        "remedyIndexes": [28, 29, 31, 56]
+      },
+
+      "P0306": {
+        "title": "Cylinder 6 Misfire",
+        "description": "Cylinder 6 is experiencing incomplete combustion.",
+        "causeIndexes": [33, 34, 35, 36, 75],
+        "remedyIndexes": [28, 29, 31, 56]
+      },
+
+      "P0325": {
+        "title": "Knock Sensor Circuit Malfunction",
+        "description": "The knock sensor is not producing the expected signal, affecting ignition timing control.",
+        "causeIndexes": [8, 9, 33],
+        "remedyIndexes": [8, 9, 29]
+      },
+
+      "P0335": {
+        "title": "Crankshaft Position Sensor Circuit",
+        "description": "The crankshaft position sensor is failing to provide a valid rotational signal.",
+        "causeIndexes": [8, 32, 47],
+        "remedyIndexes": [8, 31]
+      },
+
+      "P0340": {
+        "title": "Camshaft Position Sensor Circuit",
+        "description": "The PCM cannot detect a proper signal from the camshaft position sensor.",
+        "causeIndexes": [8, 9, 31],
+        "remedyIndexes": [8, 30]
+      },
+
+      "P0400": {
+        "title": "EGR Flow Malfunction",
+        "description": "Exhaust gas recirculation flow is incorrect or insufficient.",
+        "causeIndexes": [57, 58, 59],
+        "remedyIndexes": [41, 42]
+      },
+
+      "P0401": {
+        "title": "Insufficient EGR Flow",
+        "description": "The PCM detects low EGR flow rate during operation.",
+        "causeIndexes": [58, 59, 1],
+        "remedyIndexes": [41, 42, 1]
+      },
+
+      "P0402": {
+        "title": "Excessive EGR Flow",
+        "description": "Too much EGR flow is entering the intake, causing rough idle or stalling.",
+        "causeIndexes": [57, 58],
+        "remedyIndexes": [41, 42]
+      },
+
+      "P0410": {
+        "title": "Secondary Air Injection System Malfunction",
+        "description": "The secondary air injection system is not supplying air to the exhaust during cold starts.",
+        "causeIndexes": [63, 64, 8],
+        "remedyIndexes": [45, 46, 8]
+      },
+
+      "P0411": {
+        "title": "Secondary Air Injection Incorrect Flow",
+        "description": "Airflow from the secondary air system does not match PCM expectations.",
+        "causeIndexes": [63, 64, 5],
+        "remedyIndexes": [45, 46, 5]
+      },
+
+      "P0420": {
+        "title": "Catalyst System Efficiency Below Threshold (Bank 1)",
+        "description": "The catalytic converter on bank 1 is not performing efficiently.",
+        "causeIndexes": [48, 49, 6, 5],
+        "remedyIndexes": [32, 33, 6, 5]
+      },
+
+      "P0430": {
+        "title": "Catalyst System Efficiency Below Threshold (Bank 2)",
+        "description": "Bank 2 catalytic converter efficiency has fallen below acceptable levels.",
+        "causeIndexes": [48, 49, 6, 5],
+        "remedyIndexes": [32, 33, 6, 5]
+      },
+
+      "P0440": {
+        "title": "EVAP System Malfunction",
+        "description": "A general fault has been detected in the evaporative emissions control system.",
+        "causeIndexes": [16, 17, 18, 19, 20],
+        "remedyIndexes": [16, 17, 18, 19]
+      },
+
+      "P0441": {
+        "title": "EVAP Incorrect Purge Flow",
+        "description": "The purge valve is not flowing correctly when commanded.",
+        "causeIndexes": [14, 20, 0],
+        "remedyIndexes": [14, 16, 0]
+      },
+
+      "P0442": {
+        "title": "EVAP System Small Leak Detected",
+        "description": "A small vapor leak has been detected in the EVAP system.",
+        "causeIndexes": [17, 18, 19],
+        "remedyIndexes": [17, 18, 19]
+      },
+
+      "P0446": {
+        "title": "EVAP Vent Control Circuit",
+        "description": "The EVAP vent valve is not functioning correctly electrically.",
+        "causeIndexes": [8, 9, 21],
+        "remedyIndexes": [8, 9, 15]
+      },
+
+      "P0455": {
+        "title": "EVAP System Large Leak Detected",
+        "description": "A major leak has been detected in the evaporative emissions system.",
+        "causeIndexes": [16, 17, 18],
+        "remedyIndexes": [16, 17, 18]
+      },
+
+      "P0456": {
+        "title": "EVAP System Very Small Leak Detected",
+        "description": "A very small EVAP leak is present, often due to a worn gas cap or microcrack in a hose.",
+        "causeIndexes": [17, 18],
+        "remedyIndexes": [17, 18]
+      },
+
+      "P0496": {
+        "title": "EVAP Flow During Non-Purge",
+        "description": "The PCM detects that purge flow is occurring when it should not.",
+        "causeIndexes": [14, 15],
+        "remedyIndexes": [14, 15]
+      }
+
+
+      
+  }
+}
+
