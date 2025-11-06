@@ -175,12 +175,62 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     // MARK: - Request Handling
 
     var pidList: [OBDCommand] = []
+    
+    
+    /// Sends an OBD2 command to the vehicle and returns a publisher with the result.
+        /// - Parameter command: The OBD2 command to send.
+        /// - Returns: A publisher with the measurement result.
+        /// - Throws: Errors that might occur during the request process.
+        public func startContinuousUpdates(
+            _ pids: [OBDCommand],
+            unit: MeasurementUnit = .metric,
+            interval: TimeInterval = 1
+        ) -> AnyPublisher<[OBDCommand: MeasurementResult], Error> {
+
+            Timer.publish(every: interval, on: .main, in: .common)
+                .autoconnect()
+                .flatMap { [weak self] _ -> Future<[OBDCommand: MeasurementResult], Error> in
+                    Future { promise in
+                        guard let self = self else {
+                            promise(.failure(OBDServiceError.notConnectedToVehicle))
+                            return
+                        }
+
+                        Task(priority: .userInitiated) {
+                            var aggregatedResults: [OBDCommand: MeasurementResult] = [:]
+
+                            for pid in pids {
+                                do {
+                                    let singleResult = try await self.requestPIDs([pid], unit: unit)
+
+                                    for (command, value) in singleResult {
+                                        aggregatedResults[command] = value
+                                    }
+
+                                } catch {
+                                    obdWarning(
+                                        "requestPIDs failed for PID \(pid) — error: \(error)",
+                                        category: .connection
+                                    )
+
+                                    continue   // recommended for resilience
+                                    //promise(.failure(error))
+                                    
+                                }
+                            }
+
+                            promise(.success(aggregatedResults))
+                        }
+                    }
+                }
+                .eraseToAnyPublisher()
+        }
 
     /// Sends an OBD2 command to the vehicle and returns a publisher with the result.
     /// - Parameter command: The OBD2 command to send.
     /// - Returns: A publisher with the measurement result.
     /// - Throws: Errors that might occur during the request process.
-    public func startContinuousUpdates(
+    public func startContinuousUpdates2(
         _ pids: [OBDCommand],
         unit: MeasurementUnit = .metric,
         interval: TimeInterval = 1

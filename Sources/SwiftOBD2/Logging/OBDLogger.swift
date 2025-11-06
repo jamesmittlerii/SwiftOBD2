@@ -70,7 +70,7 @@ public class OBDLogger {
     }
     
     private func log(_ message: String, level: OSLogType, category: Category, file: String, function: String, line: Int) {
-        guard isLoggingEnabled && level.rawValue >= minimumLogLevel.rawValue else { return }
+        guard isLoggingEnabled /* FIXME && level.rawValue >= minimumLogLevel.rawValue */ else { return }
         guard let logger = loggers[category] else { return }
         
         let fileName = URL(fileURLWithPath: file).lastPathComponent
