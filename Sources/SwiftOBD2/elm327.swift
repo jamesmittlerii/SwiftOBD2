@@ -242,8 +242,7 @@ class ELM327 {
              */
             
             _ = try await sendCommand("ATZ") // Reset adapter
-            sleep(1)
-            _ = try await okResponse("ATE0") // Echo off
+            _ = try await sendCommand("ATE0") // Echo off
             //_ = try await okResponse("STI")
             //_ = try await okResponse("VTI")
             _ = try await okResponse("ATD")
