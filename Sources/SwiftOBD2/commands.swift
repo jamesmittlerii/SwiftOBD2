@@ -420,7 +420,7 @@ extension OBDCommand.General {
 }
 
 extension OBDCommand.Mode1 {
-    var properties: CommandProperties {
+    public var properties: CommandProperties {
         switch self {
         case .pidsA: return CommandProperties("0100", "Supported PIDs [01-20]", 5, .pid)
         case .status: return CommandProperties("0101", "Status since DTCs cleared", 5, .status)
