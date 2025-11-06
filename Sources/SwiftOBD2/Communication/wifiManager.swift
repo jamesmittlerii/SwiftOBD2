@@ -103,7 +103,7 @@ class WifiManager: CommProtocol {
         }
     }
 
-    func sendCommand(_ command: String, retries: Int) async throws -> [String] {
+    func sendCommandOld(_ command: String, retries: Int) async throws -> [String] {
         guard let data = "\(command)\r".data(using: .ascii) else {
             throw CommunicationError.invalidData
         }
@@ -213,7 +213,7 @@ class WifiManager: CommProtocol {
 
     func scanForPeripherals() async throws {}
     
-    func sendCommandNew(_ command: String, retries: Int) async throws -> [String] {
+    func sendCommand(_ command: String, retries: Int) async throws -> [String] {
         guard let tcp else { throw ELM327Error.noConnection }
 
         // Ensure connection is ready

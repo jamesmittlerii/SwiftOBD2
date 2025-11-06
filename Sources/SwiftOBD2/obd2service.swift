@@ -225,7 +225,8 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
 
                         for pid in pids {
                             do {
-                                let singleResult = try await self.requestPID(pid, unit: unit)
+                               let singleResult = try await self.requestPID(pid, unit: unit)
+                               // let singleResult = try await self.requestPIDs([pid], unit: unit)
                                 for (command, value) in singleResult {
                                     aggregatedResults[command] = value
                                 }
@@ -311,7 +312,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
 
         let pidHex = String(command.properties.command.suffix(2))
         let requestedPid = UInt8(pidHex, radix: 16) ?? 0x00
-        let firstPayloadByte = responseData.dropFirst().first ?? 0x00
+        let firstPayloadByte = responseData.first ?? 0x00
 
         if firstPayloadByte != requestedPid {
             obdWarning(
