@@ -183,8 +183,9 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     public func startContinuousUpdates(
         _ pids: [OBDCommand],
         unit: MeasurementUnit = .metric,
-        interval: TimeInterval = 2
+        interval: TimeInterval = 1
     ) -> AnyPublisher<[OBDCommand: MeasurementResult], Error> {
+
         Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
             .flatMap { [weak self] _ -> Future<[OBDCommand: MeasurementResult], Error> in
@@ -195,21 +196,29 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
                     }
 
                     Task(priority: .userInitiated) {
-                        do {
-                            var aggregatedResults: [OBDCommand: MeasurementResult] = [:]
+                        var aggregatedResults: [OBDCommand: MeasurementResult] = [:]
 
-                            // Sequentially request each PID
-                            for pid in pids {
+                        for pid in pids {
+                            do {
                                 let singleResult = try await self.requestPIDs([pid], unit: unit)
+
                                 for (command, value) in singleResult {
                                     aggregatedResults[command] = value
                                 }
-                            }
 
-                            promise(.success(aggregatedResults))
-                        } catch {
-                            promise(.failure(error))
+                            } catch {
+                                obdWarning(
+                                    "requestPIDs failed for PID \(pid) — error: \(error)",
+                                    category: .connection
+                                )
+
+                                continue   // recommended for resilience
+                                //promise(.failure(error))
+                                
+                            }
                         }
+
+                        promise(.success(aggregatedResults))
                     }
                 }
             }
