@@ -32,7 +32,7 @@ enum ELM327Error: Error, LocalizedError {
         switch self {
         case .noProtocolFound:
             return "No compatible OBD protocol found."
-        case let .invalidResponse(message):
+        case .invalidResponse(let message):
             return "Invalid response received: \(message)"
         case .adapterInitializationFailed:
             return "Failed to initialize adapter."
@@ -42,7 +42,7 @@ enum ELM327Error: Error, LocalizedError {
             return "Invalid or unsupported OBD protocol."
         case .timeout:
             return "Operation timed out."
-        case let .connectionFailed(reason):
+        case .connectionFailed(let reason):
             return "Connection failed: \(reason)"
         case .unknownError:
             return "An unknown error occurred."
@@ -83,7 +83,10 @@ class ELM327 {
             .sink { [weak self] state in
                 self?.connectionState = state
                 self?.obdDelegate?.connectionStateChanged(state: state)
-                obdDebug("Connection state updated: \(state.hashValue)", category: .connection)
+                obdDebug(
+                    "Connection state updated: \(state.hashValue)",
+                    category: .connection
+                )
             }
             .store(in: &cancellables)
     }
@@ -102,9 +105,14 @@ class ELM327 {
     ///     - `SetupError.peripheralNotFound` if the peripheral could not be found.
     ///     - `SetupError.ignitionOff` if the vehicle's ignition is not on.
     ///     - `SetupError.invalidProtocol` if the protocol is not recognized.
-    func setupVehicle(preferredProtocol: PROTOCOL?, querySupportedPIDs: Bool = true) async throws -> OBDInfo {
+    func setupVehicle(
+        preferredProtocol: PROTOCOL?,
+        querySupportedPIDs: Bool = true
+    ) async throws -> OBDInfo {
         //        var obdProtocol: PROTOCOL?
-        let detectedProtocol = try await detectProtocol(preferredProtocol: preferredProtocol)
+        let detectedProtocol = try await detectProtocol(
+            preferredProtocol: preferredProtocol
+        )
 
         //        guard let obdProtocol = detectedProtocol else {
         //            throw SetupError.noProtocolFound
@@ -119,20 +127,26 @@ class ELM327 {
 
         var supportedPIDs: [OBDCommand]? = nil
         var ecuMap: [UInt8: ECUID]? = nil
-        
-        if (querySupportedPIDs)
-        {
-        supportedPIDs = await getSupportedPIDs()
 
-        guard let messages = try canProtocol?.parse(r100) else {
-            throw ELM327Error.invalidResponse(message: "Invalid response to 0100")
-        }
+        if querySupportedPIDs {
+            supportedPIDs = await getSupportedPIDs()
 
-        ecuMap = populateECUMap(messages)
+            guard let messages = try canProtocol?.parse(r100) else {
+                throw ELM327Error.invalidResponse(
+                    message: "Invalid response to 0100"
+                )
+            }
+
+            ecuMap = populateECUMap(messages)
         }
 
         connectionState = .connectedToVehicle
-        return OBDInfo(vin: vin, supportedPIDs: supportedPIDs, obdProtocol: detectedProtocol, ecuMap: ecuMap)
+        return OBDInfo(
+            vin: vin,
+            supportedPIDs: supportedPIDs,
+            obdProtocol: detectedProtocol,
+            ecuMap: ecuMap
+        )
     }
 
     // MARK: - Protocol Selection
@@ -141,15 +155,23 @@ class ELM327 {
     /// - Parameter preferredProtocol: An optional preferred protocol to attempt first.
     /// - Returns: The detected `PROTOCOL`.
     /// - Throws: `ELM327Error` if detection fails.
-    private func detectProtocol(preferredProtocol: PROTOCOL? = nil) async throws -> PROTOCOL {
+    private func detectProtocol(preferredProtocol: PROTOCOL? = nil) async throws
+        -> PROTOCOL
+    {
         obdInfo("Starting protocol detection...", category: .protocol)
 
         if let protocolToTest = preferredProtocol {
-            obdInfo("Attempting preferred protocol: \(protocolToTest.description)", category: .protocol)
+            obdInfo(
+                "Attempting preferred protocol: \(protocolToTest.description)",
+                category: .protocol
+            )
             if await testProtocol(protocolToTest) {
                 return protocolToTest
             } else {
-                obdWarning("Preferred protocol \(protocolToTest.description) failed. Falling back to automatic detection.", category: .protocol)
+                obdWarning(
+                    "Preferred protocol \(protocolToTest.description) failed. Falling back to automatic detection.",
+                    category: .protocol
+                )
             }
         } else {
             do {
@@ -159,7 +181,10 @@ class ELM327 {
             }
         }
 
-        obdError("Failed to detect a compatible OBD protocol.", category: .protocol)
+        obdError(
+            "Failed to detect a compatible OBD protocol.",
+            category: .protocol
+        )
         throw ELM327Error.noProtocolFound
     }
 
@@ -173,8 +198,14 @@ class ELM327 {
 
         let obdProtocolNumber = try await sendCommand("ATDPN")
 
-        guard let obdProtocol = PROTOCOL(rawValue: String(obdProtocolNumber[0].dropFirst())) else {
-            throw ELM327Error.invalidResponse(message: "Invalid protocol number: \(obdProtocolNumber)")
+        guard
+            let obdProtocol = PROTOCOL(
+                rawValue: String(obdProtocolNumber[0].dropFirst())
+            )
+        else {
+            throw ELM327Error.invalidResponse(
+                message: "Invalid protocol number: \(obdProtocolNumber)"
+            )
         }
 
         _ = await testProtocol(obdProtocol)
@@ -188,7 +219,10 @@ class ELM327 {
     /// - Throws: Various setup-related errors.
     private func detectProtocolManually() async throws -> PROTOCOL {
         for protocolOption in PROTOCOL.allCases where protocolOption != .NONE {
-            obdInfo("Testing protocol: \(protocolOption.description)", category: .protocol)
+            obdInfo(
+                "Testing protocol: \(protocolOption.description)",
+                category: .protocol
+            )
             _ = try await okResponse(protocolOption.cmd)
             if await testProtocol(protocolOption) {
                 return protocolOption
@@ -209,19 +243,31 @@ class ELM327 {
         let response = try? await sendCommand("0100", retries: 3)
 
         if let response = response,
-           response.contains(where: { $0.range(of: #"41\s*00"#, options: .regularExpression) != nil }) {
-            obdInfo("Protocol \(obdProtocol.description) is valid.", category: .protocol)
+            response.contains(where: {
+                $0.range(of: #"41\s*00"#, options: .regularExpression) != nil
+            })
+        {
+            obdInfo(
+                "Protocol \(obdProtocol.description) is valid.",
+                category: .protocol
+            )
             r100 = response
             return true
         } else {
-            obdWarning("Protocol \(obdProtocol.rawValue) did not return valid 0100 response.", category: .protocol)
+            obdWarning(
+                "Protocol \(obdProtocol.rawValue) did not return valid 0100 response.",
+                category: .protocol
+            )
             return false
         }
     }
 
     // MARK: - Adapter Initialization
 
-    func connectToAdapter(timeout: TimeInterval, peripheral: CBPeripheral? = nil) async throws {
+    func connectToAdapter(
+        timeout: TimeInterval,
+        peripheral: CBPeripheral? = nil
+    ) async throws {
         try await comm.connectAsync(timeout: timeout, peripheral: peripheral)
     }
 
@@ -240,29 +286,36 @@ class ELM327 {
             _ = try await okResponse("ATH1") // Headers off
             _ = try await okResponse("ATSP0") // Set protocol to automatic
              */
-            
-            _ = try await sendCommand("ATZ") // Reset adapter
-            _ = try await sendCommand("ATE0") // Echo off
+
+            _ = try await sendCommand("ATZ")  // Reset adapter
+            try await Task.sleep(nanoseconds: 300_000_000)
+
+            _ = try await sendCommand("ATE0")  // Echo off
+            _ = try await okResponse("ATS0")
+            _ = try await okResponse("ATL0")
+            _ = try await okResponse("ATH1")
+            _ = try await okResponse("ATSP0")
             //_ = try await okResponse("STI")
             //_ = try await okResponse("VTI")
-            _ = try await okResponse("ATD")
-            _ = try await okResponse("ATD0")
-            _ = try await okResponse("ATE0")
-            _ = try await okResponse("ATH1")
-            _ = try await okResponse("ATSP6")
-            _ = try await okResponse("ATE0")
-            _ = try await okResponse("ATH1")
-            _ = try await okResponse("ATM0")
-            _ = try await okResponse("ATS0")
-            _ = try await okResponse("ATAT1")
-            _ = try await okResponse("ATAL")
-            _ = try await okResponse("ATST64")
-            
-            
-            
-            obdInfo("ELM327 adapter initialized successfully.", category: .connection)
+            //_ = try await okResponse("ATD")
+            //_ = try await okResponse("ATD0")
+
+            //_ = try await okResponse("ATSP6")
+            //_ = try await okResponse("ATM0")
+            //_ = try await okResponse("ATS0")
+            //_ = try await okResponse("ATAT1")
+            //_ = try await okResponse("ATAL")
+            //_ = try await okResponse("ATST64")
+
+            obdInfo(
+                "ELM327 adapter initialized successfully.",
+                category: .connection
+            )
         } catch {
-            obdError("Adapter initialization failed: \(error.localizedDescription)", category: .connection)
+            obdError(
+                "Adapter initialization failed: \(error.localizedDescription)",
+                category: .connection
+            )
             throw ELM327Error.adapterInitializationFailed
         }
     }
@@ -278,7 +331,9 @@ class ELM327 {
 
     // MARK: - Message Sending
 
-    func sendCommand(_ message: String, retries: Int = 1) async throws -> [String] {
+    func sendCommand(_ message: String, retries: Int = 1) async throws
+        -> [String]
+    {
         try await comm.sendCommand(message, retries: retries)
     }
 
@@ -288,16 +343,23 @@ class ELM327 {
             return response
         } else {
             obdError("Invalid response: \(response)", category: .communication)
-            throw ELM327Error.invalidResponse(message: "message: \(message), \(String(describing: response.first))")
+            throw ELM327Error.invalidResponse(
+                message:
+                    "message: \(message), \(String(describing: response.first))"
+            )
         }
     }
 
     func getStatus() async throws -> Result<DecodeResult, DecodeError> {
         obdInfo("Getting status", category: .communication)
         let statusCommand = OBDCommand.Mode1.status
-        let statusResponse = try await sendCommand(statusCommand.properties.command)
+        let statusResponse = try await sendCommand(
+            statusCommand.properties.command
+        )
         obdDebug("Status response: \(statusResponse)", category: .communication)
-        guard let statusData = try canProtocol?.parse(statusResponse).first?.data else {
+        guard
+            let statusData = try canProtocol?.parse(statusResponse).first?.data
+        else {
             return .failure(.noData)
         }
         return statusCommand.properties.decode(data: statusData)
@@ -320,11 +382,14 @@ class ELM327 {
 
             let ecuId = message.ecu
             switch decodedResult {
-            case let .success(result):
+            case .success(let result):
                 dtcs[ecuId] = result.troubleCode
 
-            case let .failure(error):
-                obdError("Failed to decode DTC: \(error)", category: .communication)
+            case .failure(let error):
+                obdError(
+                    "Failed to decode DTC: \(error)",
+                    category: .communication
+                )
             }
         }
 
@@ -342,27 +407,34 @@ class ELM327 {
 
     func requestVin() async -> String? {
         let command = OBDCommand.Mode9.VIN
-        guard let vinResponse = try? await sendCommand(command.properties.command) else {
-            return nil
-        }
-
-        guard let data = try? canProtocol?.parse(vinResponse).first?.data,
-              var vinString = String(bytes: data, encoding: .utf8)
+        guard
+            let vinResponse = try? await sendCommand(command.properties.command)
         else {
             return nil
         }
 
-        vinString = vinString
-            .replacingOccurrences(of: "[^a-zA-Z0-9]",
-                                  with: "",
-                                  options: .regularExpression)
+        guard let data = try? canProtocol?.parse(vinResponse).first?.data,
+            var vinString = String(bytes: data, encoding: .utf8)
+        else {
+            return nil
+        }
+
+        vinString =
+            vinString
+            .replacingOccurrences(
+                of: "[^a-zA-Z0-9]",
+                with: "",
+                options: .regularExpression
+            )
 
         return vinString
     }
 }
 
 extension ELM327 {
-    private func populateECUMap(_ messages: [MessageProtocol]) -> [UInt8: ECUID]? {
+    private func populateECUMap(_ messages: [MessageProtocol]) -> [UInt8:
+        ECUID]?
+    {
         let engineTXID = 0
         let transmissionTXID = 1
         var ecuMap: [UInt8: ECUID] = [:]
@@ -399,7 +471,10 @@ extension ELM327 {
 
             for message in messages {
                 guard let bits = message.data?.bitCount() else {
-                    obdError("parse_frame failed to extract data", category: .communication)
+                    obdError(
+                        "parse_frame failed to extract data",
+                        category: .communication
+                    )
                     continue
                 }
                 if bits > bestBits {
@@ -431,8 +506,13 @@ extension ELM327 {
 
         for pidGetter in pidGetters {
             do {
-                obdInfo("Getting supported PIDs for \(pidGetter.properties.command)", category: .communication)
-                let response = try await sendCommand(pidGetter.properties.command)
+                obdInfo(
+                    "Getting supported PIDs for \(pidGetter.properties.command)",
+                    category: .communication
+                )
+                let response = try await sendCommand(
+                    pidGetter.properties.command
+                )
                 // find first instance of 41 plus command sent, from there we determine the position of everything else
                 // Ex.
                 //        || ||
@@ -442,12 +522,19 @@ extension ELM327 {
                 }
 
                 let supportedCommands = OBDCommand.allCommands
-                    .filter { supportedPidsByECU.contains(String($0.properties.command.dropFirst(2))) }
+                    .filter {
+                        supportedPidsByECU.contains(
+                            String($0.properties.command.dropFirst(2))
+                        )
+                    }
                     .map { $0 }
 
                 supportedPIDs.append(contentsOf: supportedCommands)
             } catch {
-                obdError("\(error.localizedDescription)", category: .communication)
+                obdError(
+                    "\(error.localizedDescription)",
+                    category: .communication
+                )
             }
         }
         // filter out pidGetters
@@ -496,13 +583,14 @@ struct BatchedResponse {
         //print("Buffer: \(valueData.compactMap { String(format: "%02X ", $0) }.joined())")
         let result = cmd.properties.decode(data: valueData, unit: unit)
 
-        
-
         switch result {
-        case let .success(measurementResult):
+        case .success(let measurementResult):
             return measurementResult.measurementResult
-        case let .failure(error):
-            obdError("Failed to decode command \(cmd.properties.command): \(error.localizedDescription) | Data: \(valueData.map { String(format: "%02X", $0) }.joined(separator: " "))", category: .parsing)
+        case .failure(let error):
+            obdError(
+                "Failed to decode command \(cmd.properties.command): \(error.localizedDescription) | Data: \(valueData.map { String(format: "%02X", $0) }.joined(separator: " "))",
+                category: .parsing
+            )
             return nil
         }
     }
@@ -511,9 +599,9 @@ struct BatchedResponse {
 extension String {
     var hexBytes: [UInt8] {
         var position = startIndex
-        return (0 ..< count / 2).compactMap { _ in
+        return (0..<count / 2).compactMap { _ in
             defer { position = index(position, offsetBy: 2) }
-            return UInt8(self[position ... index(after: position)], radix: 16)
+            return UInt8(self[position...index(after: position)], radix: 16)
         }
     }
 
