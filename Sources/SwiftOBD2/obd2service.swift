@@ -183,7 +183,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     public func startContinuousUpdates(
         _ pids: [OBDCommand],
         unit: MeasurementUnit = .metric,
-        interval: TimeInterval = 1
+        interval: TimeInterval = 2
     ) -> AnyPublisher<[OBDCommand: MeasurementResult], Error> {
         Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()

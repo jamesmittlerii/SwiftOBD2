@@ -291,6 +291,7 @@ class ELM327 {
             try await Task.sleep(nanoseconds: 300_000_000)
 
             _ = try await sendCommand("ATE0")  // Echo off
+            _ = try await sendCommand("ATCRA7E8")
             _ = try await okResponse("ATS0")
             _ = try await okResponse("ATL0")
             _ = try await okResponse("ATH1")
