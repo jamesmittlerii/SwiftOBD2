@@ -186,8 +186,26 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         interval: TimeInterval = 1
     ) -> AnyPublisher<[OBDCommand: MeasurementResult], Error> {
 
-        Timer.publish(every: interval, on: .main, in: .common)
-            .autoconnect()
+        // Adaptive backoff state
+        let minInterval: TimeInterval = max(0.2, interval) // don’t go below 200ms
+        let maxInterval: TimeInterval = max(interval * 4, 2.0) // up to 4x or at least 2s
+        var currentInterval: TimeInterval = interval
+        var consecutiveFailures = 0
+        var inFlight = false
+
+        // A subject that lets us reconfigure the timer dynamically
+        let intervalSubject = CurrentValueSubject<TimeInterval, Never>(currentInterval)
+
+        // Build a dynamic timer stream driven by intervalSubject
+        let timerStream = intervalSubject
+            .removeDuplicates()
+            .flatMap { interval -> AnyPublisher<Date, Never> in
+                Timer.publish(every: interval, on: .main, in: .common)
+                    .autoconnect()
+                    .eraseToAnyPublisher()
+            }
+
+        return timerStream
             .flatMap { [weak self] _ -> Future<[OBDCommand: MeasurementResult], Error> in
                 Future { promise in
                     guard let self = self else {
@@ -195,29 +213,45 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
                         return
                     }
 
+                    // Skip tick if a previous cycle is still running
+                    if inFlight {
+                        return
+                    }
+                    inFlight = true
+
                     Task(priority: .userInitiated) {
                         var aggregatedResults: [OBDCommand: MeasurementResult] = [:]
+                        var hadFailureThisCycle = false
 
                         for pid in pids {
                             do {
-                                let singleResult = try await self.requestPIDs([pid], unit: unit)
-
+                                let singleResult = try await self.requestPID(pid, unit: unit)
                                 for (command, value) in singleResult {
                                     aggregatedResults[command] = value
                                 }
-
                             } catch {
-                                obdWarning(
-                                    "requestPIDs failed for PID \(pid) — error: \(error)",
-                                    category: .connection
-                                )
-
-                                continue   // recommended for resilience
-                                //promise(.failure(error))
-                                
+                                hadFailureThisCycle = true
+                                obdWarning("requestPID failed for \(pid): \(error)", category: .communication)
+                                // continue to next PID for resilience
+                                continue
                             }
                         }
 
+                        // Adjust backoff after the cycle
+                        if hadFailureThisCycle {
+                            consecutiveFailures += 1
+                            // Exponential backoff with cap
+                            currentInterval = min(maxInterval, currentInterval * 1.5)
+                            intervalSubject.send(currentInterval)
+                            obdInfo("Backoff increased: interval=\(currentInterval)s (failures=\(consecutiveFailures))", category: .communication)
+                        } else {
+                            // On success, slowly recover toward minInterval
+                            consecutiveFailures = 0
+                            currentInterval = max(minInterval, currentInterval * 0.9)
+                            intervalSubject.send(currentInterval)
+                        }
+
+                        inFlight = false
                         promise(.success(aggregatedResults))
                     }
                 }
@@ -240,7 +274,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     /// - Returns: measurement result
     /// - Throws: Errors that might occur during the request process.
     public func requestPIDs(_ commands: [OBDCommand], unit: MeasurementUnit) async throws -> [OBDCommand: MeasurementResult] {
-        let response = try await sendCommandInternal("01" + commands.compactMap { $0.properties.command.dropFirst(2) }.joined(), retries: 10)
+        let response = try await sendCommandInternal("01" + commands.compactMap { $0.properties.command.dropFirst(2) }.joined(), retries: 1)
 
         guard let responseData = try elm327.canProtocol?.parse(response).first?.data else { return [:] }
 
@@ -253,7 +287,45 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
 
         return results
     }
+    
+    /// Sends an OBD2 command to the vehicle and returns the raw response.
+    /// - Parameter command: The OBD2 command to send.
+    /// - Returns: measurement result
+    /// - Throws: Errors that might occur during the request process.
+    public func requestPID(_ command: OBDCommand, unit: MeasurementUnit) async throws -> [OBDCommand: MeasurementResult] {
+        let response = try await sendCommandInternal("01" + command.properties.command.dropFirst(2), retries: 1)
 
+        guard let responseData = try elm327.canProtocol?.parse(response).first?.data else { return [:] }
+
+        // Validate that the first payload byte (what BatchedResponse sees first)
+        // matches the requested PID byte from the command (e.g., 0x0F for 010F).
+        // responseData[0] is the service (0x41 for Mode 01), payload starts after that.
+        guard responseData.count >= 2 else {
+            throw OBDServiceError.commandFailed(command: command.properties.command, error: DecodeError.noData)
+        }
+
+        let pidHex = String(command.properties.command.suffix(2))
+        let requestedPid = UInt8(pidHex, radix: 16) ?? 0x00
+        let firstPayloadByte = responseData.dropFirst().first ?? 0x00
+
+        if firstPayloadByte != requestedPid {
+            obdWarning(
+                "PID echo mismatch. Expected PID 0x\(String(format: "%02X", requestedPid)), got 0x\(String(format: "%02X", firstPayloadByte))",
+                category: .parsing
+            )
+            throw OBDServiceError.pidMismatch(expected: requestedPid, actual: firstPayloadByte)
+        }
+
+        var batchedResponse = BatchedResponse(response: responseData, unit)
+
+        if let value = batchedResponse.extractValue(command) {
+            return [command: value]
+        } else {
+            return [:]
+        }
+    }
+    
+    
     /// Sends an OBD2 command to the vehicle and returns the raw response.
     ///  - Parameter command: The OBD2 command to send.
     ///  - Returns: The raw response from the vehicle.
@@ -405,6 +477,7 @@ public enum OBDServiceError: Error {
     case scanFailed(underlyingError: Error)
     case clearFailed(underlyingError: Error)
     case commandFailed(command: String, error: Error)
+    case pidMismatch(expected: UInt8, actual: UInt8)
 }
 
 public struct MeasurementResult: Equatable {
@@ -451,3 +524,4 @@ public struct VINInfo: Codable, Hashable {
     public let ModelYear: String
     public let EngineCylinders: String
 }
+
