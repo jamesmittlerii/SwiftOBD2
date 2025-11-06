@@ -19,6 +19,16 @@ import Foundation
 import OSLog
 
 enum ELM327Error: Error, LocalizedError {
+    
+    /* new cases */
+    case noConnection
+      case connectionNotReady
+      case encodingError
+      case sendFailed(Error)
+      case receiveFailed(Error)
+    //  case timeout
+    //  case invalidResponse
+    
     case noProtocolFound
     case invalidResponse(message: String)
     case adapterInitializationFailed
@@ -30,6 +40,20 @@ enum ELM327Error: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
+            
+            
+        case .noConnection:
+            return "No connection to the device."
+        case .connectionNotReady:
+            return "The connection is not yet ready."
+        case .encodingError:
+            return "Failed to encode command."
+            
+        case .sendFailed:
+            return "Failed to send command."
+        case .receiveFailed:
+            return "Failed to receive response."
+            
         case .noProtocolFound:
             return "No compatible OBD protocol found."
         case .invalidResponse(let message):

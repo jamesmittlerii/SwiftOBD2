@@ -58,7 +58,7 @@ public class OBDLogger {
     }
     
     public func warning(_ message: String, category: Category = .error, file: String = #file, function: String = #function, line: Int = #line) {
-        log(message, level: .default, category: category, file: file, function: function, line: line)
+        log(message, level: .debug, category: category, file: file, function: function, line: line)
     }
     
     public func error(_ message: String, category: Category = .error, file: String = #file, function: String = #function, line: Int = #line) {
@@ -70,7 +70,7 @@ public class OBDLogger {
     }
     
     private func log(_ message: String, level: OSLogType, category: Category, file: String, function: String, line: Int) {
-        guard isLoggingEnabled && level.rawValue >= minimumLogLevel.rawValue else { return }
+        guard isLoggingEnabled /* FIXME && level.rawValue >= minimumLogLevel.rawValue */ else { return }
         guard let logger = loggers[category] else { return }
         
         let fileName = URL(fileURLWithPath: file).lastPathComponent

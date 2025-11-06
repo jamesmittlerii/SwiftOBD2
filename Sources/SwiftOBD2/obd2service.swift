@@ -297,6 +297,11 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
 
         guard let responseData = try elm327.canProtocol?.parse(response).first?.data else { return [:] }
 
+        
+        let hex = responseData.map { String(format: "%02X", $0) }.joined()
+        obdDebug("parsed response: \(hex)")
+        
+        
         // Validate that the first payload byte (what BatchedResponse sees first)
         // matches the requested PID byte from the command (e.g., 0x0F for 010F).
         // responseData[0] is the service (0x41 for Mode 01), payload starts after that.

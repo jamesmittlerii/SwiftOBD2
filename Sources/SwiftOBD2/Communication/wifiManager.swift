@@ -103,8 +103,6 @@ class WifiManager: CommProtocol {
         }
     }
 
-   
-
     func sendCommand(_ command: String, retries: Int) async throws -> [String] {
         guard let data = "\(command)\r".data(using: .ascii) else {
             throw CommunicationError.invalidData
@@ -138,7 +136,7 @@ class WifiManager: CommProtocol {
             throw CommunicationError.invalidData
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
             
             // Step 1: Send the command
             tcpConnection.send(content: data, completion: .contentProcessed { error in
@@ -151,7 +149,6 @@ class WifiManager: CommProtocol {
                 
                 func receiveLoop() {
                     tcpConnection.receive(minimumIncompleteLength: 1, maximumLength: 512) { chunk, _, isComplete, error in
-                        
                         if let error = error {
                             continuation.resume(throwing: CommunicationError.errorOccurred(error))
                             return
@@ -191,9 +188,7 @@ class WifiManager: CommProtocol {
         }
     }
 
-
     private func processResponse(_ response: String) -> [String]? {
-        //logger.info("Processing response: \(response)")
         var lines = response.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
         guard !lines.isEmpty else {
@@ -217,4 +212,113 @@ class WifiManager: CommProtocol {
     }
 
     func scanForPeripherals() async throws {}
+    
+    func sendCommandNew(_ command: String, retries: Int) async throws -> [String] {
+        guard let tcp else { throw ELM327Error.noConnection }
+
+        // Ensure connection is ready
+        guard tcp.state == .ready else {
+            throw ELM327Error.connectionNotReady
+        }
+
+        obdDebug("Sending: \(command)", category: .wifi)
+        
+        let commandWithCR = command + "\r"
+
+        guard let data = commandWithCR.data(using: .utf8) else {
+            throw ELM327Error.encodingError
+        }
+
+        var attempts = 0
+        var lastError: Error?
+
+        while attempts <= retries {
+            attempts += 1
+            do {
+                try await send(data, over: tcp)
+                let responseString = try await receiveUntilPrompt(over: tcp)
+                let cleaned = cleanELMResponse(responseString)
+                
+                obdDebug("received: \(cleaned)", category: .wifi)
+                return cleaned
+            } catch {
+                lastError = error
+                if attempts > retries { break }
+                // Give adapter a moment before retrying
+                try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
+            }
+        }
+
+        throw lastError ?? ELM327Error.invalidResponse(message: "No response after \(retries) retries")
+    }
+
+    private func send(_ data: Data, over connection: NWConnection) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            connection.send(content: data, completion: .contentProcessed { error in
+                if let error {
+                    continuation.resume(throwing: ELM327Error.sendFailed(error as Error))
+                } else {
+                    continuation.resume()
+                }
+            })
+        }
+    }
+
+    /// Reads until the ELM327 sends the prompt '>'
+    private func receiveUntilPrompt(over connection: NWConnection) async throws -> String {
+        var fullBuffer = Data()
+        let timeoutNanos: UInt64 = 2_500_000_000 // 2.5 seconds
+
+        return try await withThrowingTaskGroup(of: String.self) { group in
+
+            // Timeout task
+            group.addTask {
+                try await Task.sleep(nanoseconds: timeoutNanos)
+                throw ELM327Error.timeout
+            }
+
+            // Reader task
+            group.addTask { [weak self] in
+                guard let self = self else { throw ELM327Error.noConnection }
+                while true {
+                    let chunk = try await self.receiveChunk(over: connection)
+                    fullBuffer.append(chunk)
+
+                    if let str = String(data: fullBuffer, encoding: .utf8),
+                       str.contains(">") {
+                        return str
+                    }
+                }
+            }
+
+            // First task to finish wins
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
+    }
+
+    private func receiveChunk(over connection: NWConnection) async throws -> Data {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 1024) { data, _, _, error in
+                if let error {
+                    continuation.resume(throwing: ELM327Error.receiveFailed(error as Error))
+                } else if let data {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(throwing: ELM327Error.invalidResponse(message: "Empty receive"))
+                }
+            }
+        }
+    }
+
+    /// Cleans up ELM327 output → strips whitespace, prompt, echoes, empty lines
+    private func cleanELMResponse(_ raw: String) -> [String] {
+        raw
+            .replacingOccurrences(of: ">", with: "")
+            .split(separator: "\r")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
 }
+
