@@ -135,36 +135,62 @@ class WifiManager: CommProtocol {
 
     private func sendAndReceiveData(_ data: Data) async throws -> String {
         guard let tcpConnection = tcp else {
-             throw CommunicationError.invalidData
-         }
-        
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            throw CommunicationError.invalidData
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            
+            // Step 1: Send the command
             tcpConnection.send(content: data, completion: .contentProcessed { error in
                 if let error = error {
-                    obdError("Error sending data: \(error.localizedDescription)", category: .wifi)
                     continuation.resume(throwing: CommunicationError.errorOccurred(error))
                     return
                 }
 
-                tcpConnection.receive(minimumIncompleteLength: 1, maximumLength: 500) { data, _, _, error in
-                    if let error = error {
-                        obdError("Error receiving data: \(error.localizedDescription)", category: .wifi)
-                        continuation.resume(throwing: CommunicationError.errorOccurred(error))
-                        return
+                var buffer = Data()
+                
+                func receiveLoop() {
+                    tcpConnection.receive(minimumIncompleteLength: 1, maximumLength: 512) { chunk, _, isComplete, error in
+                        
+                        if let error = error {
+                            continuation.resume(throwing: CommunicationError.errorOccurred(error))
+                            return
+                        }
+                        
+                        guard let chunk = chunk else {
+                            continuation.resume(throwing: CommunicationError.invalidData)
+                            return
+                        }
+                        
+                        buffer.append(chunk)
+                        
+                        // Try to decode into UTF-8
+                        let text = String(data: buffer, encoding: .utf8) ?? ""
+                        
+                        // ✅ ELM327 is done
+                        if text.contains(">") {
+                            //let cleaned = text.replacingOccurrences(of: ">", with: "")
+                            obdDebug("received: \(text)", category: .wifi)
+                            continuation.resume(returning: text)
+                            return
+                        }
+                        
+                        // ✅ Continue receiving until prompt arrives
+                        if !isComplete {
+                            receiveLoop()
+                        } else {
+                            // No prompt AND stream ended? -> Error
+                            continuation.resume(throwing: CommunicationError.invalidData)
+                        }
                     }
-
-                    guard let response = data, let responseString = String(data: response, encoding: .utf8) else {
-                        obdWarning("Received invalid or empty data", category: .wifi)
-                        continuation.resume(throwing: CommunicationError.invalidData)
-                        return
-                    }
-
-                    obdDebug("device response: \(responseString)",category: .wifi)
-                    continuation.resume(returning: responseString)
                 }
+                
+                // Begin receive loop
+                receiveLoop()
             })
         }
     }
+
 
     private func processResponse(_ response: String) -> [String]? {
         //logger.info("Processing response: \(response)")
