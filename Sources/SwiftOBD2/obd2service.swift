@@ -496,6 +496,14 @@ public struct MeasurementResult: Equatable {
 	}
 }
 
+
+extension MeasurementResult: Comparable {
+    public static func < (lhs: MeasurementResult, rhs: MeasurementResult) -> Bool {
+        guard lhs.unit == rhs.unit else { return false }
+        return lhs.value < rhs.value
+    }
+}
+
 public extension MeasurementResult {
 	static func mock(_ value: Double = 125, _ suffix: String = "km/h") -> MeasurementResult {
 		.init(value: value, unit: .init(symbol: suffix))
