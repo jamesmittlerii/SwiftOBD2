@@ -23,8 +23,8 @@ struct Command: Codable {
 }
 
 public class ConfigurationService {
-    static var shared = ConfigurationService()
-    var connectionType: ConnectionType {
+    public static var shared = ConfigurationService()
+    public var connectionType: ConnectionType {
         get {
             let rawValue = UserDefaults.standard.string(forKey: "connectionType") ?? "Bluetooth"
             return ConnectionType(rawValue: rawValue) ?? .bluetooth
@@ -538,4 +538,3 @@ public struct VINInfo: Codable, Hashable {
     public let ModelYear: String
     public let EngineCylinders: String
 }
-
