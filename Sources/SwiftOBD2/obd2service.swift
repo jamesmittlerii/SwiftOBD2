@@ -107,13 +107,13 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     /// - Parameter preferedProtocol: The optional OBD2 protocol to use (if supported).
     /// - Returns: Information about the connected vehicle (`OBDInfo`).
     /// - Throws: Errors that might occur during the connection process.
-    public func startConnection(preferedProtocol: PROTOCOL? = nil, timeout: TimeInterval = 30, querySupportedPIDs: Bool = true) async throws -> OBDInfo {
+    public func startConnection(preferedProtocol: PROTOCOL? = nil, timeout: TimeInterval = 30, querySupportedPIDs: Bool = true,  peripheral: CBPeripheral? = nil) async throws -> OBDInfo {
         let startTime = CFAbsoluteTimeGetCurrent()
         obdInfo("Starting connection with timeout: \(timeout)s", category: .connection)
         
         do {
             obdDebug("Connecting to adapter...", category: .connection)
-            try await elm327.connectToAdapter(timeout: timeout)
+            try await elm327.connectToAdapter(timeout: timeout, peripheral: peripheral)
             
             obdDebug("Initializing adapter...", category: .connection)
             try await elm327.adapterInitialization()

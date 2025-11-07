@@ -303,6 +303,10 @@ class BLEConnection: NSObject, BLEConnectionProtocol {
             characteristicUUIDs = [CBUUID(string: "FFF1"), CBUUID(string: "FFF2")]
         case CBUUID(string: "18F0"):
             characteristicUUIDs = [CBUUID(string: "2AF0"), CBUUID(string: "2AF1")]
+        case CBUUID(string: "FFC0"):
+            characteristicUUIDs = [CBUUID(string: "FFC1"), CBUUID(string: "FFC2")]
+        case CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"):
+            characteristicUUIDs = [CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"), CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E") ]
         default:
             characteristicUUIDs = []
         }

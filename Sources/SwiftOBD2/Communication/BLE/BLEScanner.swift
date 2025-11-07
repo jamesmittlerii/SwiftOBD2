@@ -3,6 +3,7 @@ import CoreBluetooth
 import Foundation
 import OSLog
 
+
 /// Protocol for BLE scanning operations
 protocol BLEScannerProtocol {
     var foundPeripherals: [CBPeripheral] { get }
@@ -57,19 +58,32 @@ class BLEPeripheralScanner: ObservableObject {
         }
 
         // Otherwise wait for discovery
-        return try await withTimeout(seconds: timeout, timeoutError: BLEScannerError.scanTimeout) {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CBPeripheral, Error>) in
-                self.foundPeripheralCompletion = { peripheral, error in
-                    if let peripheral = peripheral {
-                        continuation.resume(returning: peripheral)
-                    } else if let error = error {
-                        continuation.resume(throwing: error)
-                    } else {
-                        continuation.resume(throwing: BLEScannerError.peripheralNotFound)
+        return try await withTimeout(
+            seconds: timeout,
+            timeoutError: BLEManagerError.timeout,
+            onTimeout: { [weak self] in
+                // If there is a pending continuation, resume it with a timeout error
+                if let completion = self?.foundPeripheralCompletion {
+                    completion(nil, BLEManagerError.timeout)
+                    self?.foundPeripheralCompletion = nil
+                }
+            },
+            operation: {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CBPeripheral, Error>) in
+                    self.foundPeripheralCompletion = { peripheral, error in
+                        if let peripheral = peripheral {
+                            continuation.resume(returning: peripheral)
+                        } else if let error = error {
+                            continuation.resume(throwing: error)
+                        } else {
+                            continuation.resume(throwing: BLEScannerError.peripheralNotFound)
+                        }
+                        // Clear after resuming to avoid double-resume
+                        self.foundPeripheralCompletion = nil
                     }
                 }
             }
-        }
+        )
     }
 }
 // MARK: - CBPeripheralDelegate
@@ -118,7 +132,7 @@ func withTimeout<R>(
 
             // Call cleanup handler if provided
             onTimeout?()
-            throw timeoutError
+             throw timeoutError
         }
 
         let result = try await group.next()!
