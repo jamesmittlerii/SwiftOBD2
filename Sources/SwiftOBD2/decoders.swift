@@ -88,7 +88,7 @@ extension Unit {
     static let none = Unit(symbol: "")
     static let rpm = Unit(symbol: "rpm")
     //    static let kph = Unit(symbol: "KP/H")
-    //    static let mph = Unit(symbol: "MP/H")
+    //    static let mph = Unit.symbol: "MP/H")
 
     static let Pascal = Unit(symbol: "Pa")
     static let bar = Unit(symbol: "bar")
@@ -650,14 +650,6 @@ struct O2SensorsDecoder: Decoder {
         DecodeResult, DecodeError
     > {
         let bits = BitArray(data: data)
-        //        return (
-        //                (),  # bank 0 is invalid
-        //                tuple(bits[:2]),  # bank 1
-        //                tuple(bits[2:4]),  # bank 2
-        //                tuple(bits[4:6]),  # bank 3
-        //                tuple(bits[6:]),  # bank 4
-        //            )
-
         let bank1 = Array(bits.binaryArray[0..<4])
         let bank2 = Array(bits.binaryArray[4..<8])
 
@@ -670,14 +662,6 @@ struct O2SensorsAltDecoder: Decoder {
         DecodeResult, DecodeError
     > {
         let bits = BitArray(data: data)
-        //        return (
-        //                (),  # bank 0 is invalid
-        //                tuple(bits[:2]),  # bank 1
-        //                tuple(bits[2:4]),  # bank 2
-        //                tuple(bits[4:6]),  # bank 3
-        //                tuple(bits[6:]),  # bank 4
-        //            )
-
         let bank1 = Array(bits.binaryArray[0..<2])
         let bank2 = Array(bits.binaryArray[2..<4])
         let bank3 = Array(bits.binaryArray[4..<6])
@@ -743,13 +727,29 @@ struct FuelPressureDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<
         DecodeResult, DecodeError
     > {
-        var value = Double(data.first ?? 0)
-        value = value * 3
-        return .success(
-            .measurementResult(
-                MeasurementResult(value: value, unit: UnitPressure.kilopascals)
+        // Base formula: A * 3 (kPa)
+        var valueKPa = Double(data.first ?? 0) * 3.0
+        if unit == .imperial {
+            // Convert kPa to psi
+            let valuePsi = valueKPa * 0.145038
+            return .success(
+                .measurementResult(
+                    MeasurementResult(
+                        value: valuePsi,
+                        unit: UnitPressure.poundsForcePerSquareInch
+                    )
+                )
             )
-        )
+        } else {
+            return .success(
+                .measurementResult(
+                    MeasurementResult(
+                        value: valueKPa,
+                        unit: UnitPressure.kilopascals
+                    )
+                )
+            )
+        }
     }
 }
 
@@ -892,12 +892,28 @@ struct TemperatureDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<
         DecodeResult, DecodeError
     > {
-        let value = Double(bytesToInt(data)) - 40.0
-        return .success(
-            .measurementResult(
-                MeasurementResult(value: value, unit: UnitTemperature.celsius)
+        // Raw OBD-II temp formula: value = A - 40 (in °C)
+        let celsius = Double(bytesToInt(data)) - 40.0
+        if unit == .imperial {
+            let fahrenheit = (celsius * 9.0 / 5.0) + 32.0
+            return .success(
+                .measurementResult(
+                    MeasurementResult(
+                        value: fahrenheit,
+                        unit: UnitTemperature.fahrenheit
+                    )
+                )
             )
-        )
+        } else {
+            return .success(
+                .measurementResult(
+                    MeasurementResult(
+                        value: celsius,
+                        unit: UnitTemperature.celsius
+                    )
+                )
+            )
+        }
     }
 }
 
@@ -939,18 +955,6 @@ struct StatusDecoder: Decoder {
         DecodeResult, DecodeError
     > {
         let IGNITIONTYPE = ["Spark", "Compression"]
-        //            ┌Components not ready
-        //            |┌Fuel not ready
-        //            ||┌Misfire not ready
-        //            |||┌Spark vs. Compression
-        //            ||||┌Components supported
-        //            |||||┌Fuel supported
-        //  ┌MIL      ||||||┌Misfire supported
-        //  |         |||||||
-        //  10000011 00000111 11111111 00000000
-        //  00000000 00000111 11100101 00000000
-        //  10111110 00011111 10101000 00010011
-        //   [# DTC] X        [supprt] [~ready]
 
         // convert to binaryarray
         let bits = BitArray(data: data)
@@ -998,12 +1002,6 @@ func parseDTC(_ data: Data) -> TroubleCodeMetadata? {
     }
     guard let first = data.first, let second = data.last else { return nil }
 
-    // BYTES: (16,      35      )
-    // HEX:    4   1    2   3
-    // BIN:    01000001 00100011
-    //         [][][  in hex   ]
-    //         | / /
-    // DTC:    C0123
     var dtc = ["P", "C", "B", "U"][Int(first) >> 6]  // the last 2 bits of the first byte
     dtc += String((first >> 4) & 0b0011)  // the next pair of 2 bits. Mask off the bits we read above
     dtc += String(format: "%04X", (UInt16(first) & 0x3F) << 8 | UInt16(second))
@@ -1012,8 +1010,6 @@ func parseDTC(_ data: Data) -> TroubleCodeMetadata? {
     if let troubleCode = troubleCodeDictionary[dtc] {
         return troubleCode
     } else {
-        // The `determineSeverity` function is private to the file that defines `TroubleCode`.
-        // Since we can't access it, we'll use `.moderate` as a sensible default for unknown codes.
         return TroubleCodeMetadata(
             code: dtc,
             title: "none",
@@ -1027,12 +1023,6 @@ func parseDTC(_ data: Data) -> TroubleCodeMetadata? {
 
 public class Monitor {
     public var tests: [UInt8: MonitorTest] = [:]
-
-    //    init() {
-    //        for value in TestIds.allCases {
-    //            tests[value.rawValue] = MonitorTest(tid: value.rawValue, name: value.name, desc: value.desc, value: nil, min: nil, max: nil)
-    //        }
-    //    }
 }
 
 public struct MonitorTest {
