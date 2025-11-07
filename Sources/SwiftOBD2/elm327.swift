@@ -601,7 +601,7 @@ struct BatchedResponse {
         self.unit = unit
     }
 
-    mutating func extractValue(_ cmd: OBDCommand) -> MeasurementResult? {
+    mutating func extractValue(_ cmd: OBDCommand) -> DecodeResult? {
         let properties = cmd.properties
         let size = properties.bytes
         guard response.count >= size else { return nil }
@@ -612,8 +612,8 @@ struct BatchedResponse {
         let result = cmd.properties.decode(data: valueData, unit: unit)
 
         switch result {
-        case .success(let measurementResult):
-            return measurementResult.measurementResult
+        case .success(let decodeResult):
+            return decodeResult
         case .failure(let error):
             obdError(
                 "Failed to decode command \(cmd.properties.command): \(error.localizedDescription) | Data: \(valueData.map { String(format: "%02X", $0) }.joined(separator: " "))",

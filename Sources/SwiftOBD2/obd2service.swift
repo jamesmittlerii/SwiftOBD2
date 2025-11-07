@@ -184,7 +184,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         _ pids: [OBDCommand],
         unit: MeasurementUnit = .metric,
         interval: TimeInterval = 1
-    ) -> AnyPublisher<[OBDCommand: MeasurementResult], Error> {
+    ) -> AnyPublisher<[OBDCommand: DecodeResult], Error> {
 
         // Adaptive backoff state
         let minInterval: TimeInterval = max(0.2, interval) // don’t go below 200ms
@@ -206,7 +206,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             }
 
         return timerStream
-            .flatMap { [weak self] _ -> Future<[OBDCommand: MeasurementResult], Error> in
+            .flatMap { [weak self] _ -> Future<[OBDCommand: DecodeResult], Error> in
                 Future { promise in
                     guard let self = self else {
                         promise(.failure(OBDServiceError.notConnectedToVehicle))
@@ -220,7 +220,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
                     inFlight = true
 
                     Task(priority: .userInitiated) {
-                        var aggregatedResults: [OBDCommand: MeasurementResult] = [:]
+                        var aggregatedResults: [OBDCommand: DecodeResult] = [:]
                         var hadFailureThisCycle = false
 
                         for pid in pids {
@@ -274,14 +274,14 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     /// - Parameter command: The OBD2 command to send.
     /// - Returns: measurement result
     /// - Throws: Errors that might occur during the request process.
-    public func requestPIDs(_ commands: [OBDCommand], unit: MeasurementUnit) async throws -> [OBDCommand: MeasurementResult] {
+    public func requestPIDs(_ commands: [OBDCommand], unit: MeasurementUnit) async throws -> [OBDCommand: DecodeResult] {
         let response = try await sendCommandInternal("01" + commands.compactMap { $0.properties.command.dropFirst(2) }.joined(), retries: 1)
 
         guard let responseData = try elm327.canProtocol?.parse(response).first?.data else { return [:] }
 
         var batchedResponse = BatchedResponse(response: responseData, unit)
 
-        let results: [OBDCommand: MeasurementResult] = commands.reduce(into: [:]) { result, command in
+        let results: [OBDCommand: DecodeResult] = commands.reduce(into: [:]) { result, command in
             let measurement = batchedResponse.extractValue(command)
             result[command] = measurement
         }
@@ -293,7 +293,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     /// - Parameter command: The OBD2 command to send.
     /// - Returns: measurement result
     /// - Throws: Errors that might occur during the request process.
-    public func requestPID(_ command: OBDCommand, unit: MeasurementUnit) async throws -> [OBDCommand: MeasurementResult] {
+    public func requestPID(_ command: OBDCommand, unit: MeasurementUnit) async throws -> [OBDCommand: DecodeResult] {
         let response = try await sendCommandInternal("01" + command.properties.command.dropFirst(2), retries: 1)
 
         guard let responseData = try elm327.canProtocol?.parse(response).first?.data else { return [:] }

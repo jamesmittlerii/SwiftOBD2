@@ -425,7 +425,7 @@ extension OBDCommand.Mode1 {
         case .pidsA: return CommandProperties("0100", "Supported PIDs [01-20]", 5, .pid)
         case .status: return CommandProperties("0101", "Status since DTCs cleared", 5, .status)
         case .freezeDTC: return CommandProperties("0102", "DTC that triggered the freeze frame", 5, .singleDTC)
-        case .fuelStatus: return CommandProperties("0103", "Fuel System Status", 5, .fuelStatus)
+        case .fuelStatus: return CommandProperties("0103", "Fuel System Status", 3, .fuelStatus)
         case .engineLoad: return CommandProperties("0104", "Calculated Engine Load", 2, .percent, true)
         case .coolantTemp: return CommandProperties("0105", "Coolant temperature", 2, .temp, true, maxValue: 215, minValue: -40)
         case .shortFuelTrim1: return CommandProperties("0106", "Short Term Fuel Trim - Bank 1", 2, .percentCentered, true)

@@ -283,8 +283,10 @@ protocol Decoder {
 public enum DecodeResult {
     case stringResult(String)
     case statusResult(Status)
+    case codeResult([StatusCodeMetadata?])
     case measurementResult(MeasurementResult)
     case troubleCode([TroubleCodeMetadata])
+    
     case measurementMonitor(Monitor)
 }
 
@@ -776,60 +778,50 @@ struct AirStatusDecoder: Decoder {
 }
 
 struct FuelStatusDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<
-        DecodeResult, DecodeError
-    > {
-        let bits = BitArray(data: data)
-        var status_1: String?
-        var status_2: String?
 
-        let highBits = Array(bits.binaryArray[0..<8])
-        let lowBits = Array(bits.binaryArray[8..<16])
+    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+        let bits     = BitArray(data: data)
+        let byte1    = Array(bits.binaryArray[0..<8])
+        let byte2    = Array(bits.binaryArray[8..<16])
 
-        if highBits.filter({ $0 == 1 }).count == 1,
-            let index = highBits.firstIndex(of: 1)
-        {
-            if 7 - index < FUEL_STATUS.count {
-                status_1 = FUEL_STATUS[7 - index]
-            } else {
-                obdError(
-                    "Invalid fuel status response: high bits set",
-                    category: .parsing
-                )
+        let status1  = decodeStatusBits(byte1)
+        let status2  = decodeStatusBits(byte2)
+        
+        // Build array of nil? status entries and wrap in DecodeResult
+        let statuses: [StatusCodeMetadata?] = [status1, status2]
+        return .success(.codeResult(statuses))
+        
+    }
+
+    /// Decode a single 8-bit field into a fuel status string.
+    private func decodeStatusBits(_ bits: [Int]) -> StatusCodeMetadata? {
+
+        let setBits = bits.filter { $0 == 1 }.count
+
+        switch setBits {
+        case 0:
+            // No bits set → "0" (Unavailable)
+            return StatusCodeMetadata(code: "0", description: FUEL_STATUS["0"]!)
+   
+        case 1:
+            // Find first set bit
+            guard let index = bits.firstIndex(of: 1) else { return nil }
+
+            // Convert bit position to fuel status code:
+            // Bits are MSB → LSB, so code = 8 - index
+            let code = 8 - index
+
+            guard let status = FUEL_STATUS[String(code)] else {
+                obdError("Invalid fuel status code \(code)", category: .parsing)
+                return nil
             }
-        } else {
-            obdError(
-                "Invalid fuel status response: multiple or no bits set",
-                category: .parsing
-            )
-        }
 
-        if lowBits.filter({ $0 == 1 }).count == 1,
-            let index = lowBits.firstIndex(of: 1)
-        {
-            if 7 - index < FUEL_STATUS.count {
-                status_2 = FUEL_STATUS[7 - index]
-            } else {
-                obdError(
-                    "Invalid fuel status response: low bits set",
-                    category: .parsing
-                )
-            }
-        } else {
-            obdError(
-                "Invalid fuel status response: multiple or no bits set in low bits",
-                category: .parsing
-            )
-        }
+            return StatusCodeMetadata(code: String(code), description: FUEL_STATUS[String(code)]!)
 
-        if let status_1 = status_1, let status_2 = status_2 {
-            return .success(
-                .stringResult("Status 1: \(status_1), Status 2: \(status_2)")
-            )
-        } else if let status = status_1 ?? status_2 {
-            return .success(.stringResult("Status: \(status)"))
-        } else {
-            return .failure(.decodingFailed(reason: "No valid status found."))
+        default:
+            // More than one bit set = invalid
+            obdError("Invalid fuel status response: multiple bits set", category: .parsing)
+            return nil
         }
     }
 }
@@ -1078,12 +1070,13 @@ let compressionTests = [
     "EGR_VVT_SYSTEM_MONITORING",
 ]
 
-let FUEL_STATUS = [
-    "Open loop due to insufficient engine temperature",
-    "Closed loop, using oxygen sensor feedback to determine fuel mix",
-    "Open loop due to engine load OR fuel cut due to deceleration",
-    "Open loop due to system failure",
-    "Closed loop, using at least one oxygen sensor but there is a fault in the feedback system",
+let FUEL_STATUS: [String: String] = [
+    "0": "Unavailable",
+    "1": "Open loop due to insufficient engine temperature",
+    "2": "Closed loop, using oxygen sensor feedback to determine fuel mix",
+    "3": "Open loop due to engine load OR fuel cut due to deceleration",
+    "4": "Open loop due to system failure",
+    "5": "Closed loop, using at least one oxygen sensor but there is a fault in the feedback system"
 ]
 
 let FuelTypes = [
@@ -1187,3 +1180,4 @@ let TestIds: [UInt8: (String, String)] = [
     ),
     0x0C: ("MisFireCount", "The number of misfires since the last reset"),
 ]
+
