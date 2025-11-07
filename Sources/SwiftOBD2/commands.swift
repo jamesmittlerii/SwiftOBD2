@@ -7,11 +7,20 @@
 
 import Foundation
 
+
+
 public extension DecodeResult {
 //    var stringResult: String? {
 //        if case let .stringResult(res) = self { return res as String }
 //        return nil
 //    }
+    
+  
+    var codeResult: [StatusCodeMetadata?]? {
+        if case let .codeResult(res) = self { return res as [StatusCodeMetadata?] }
+        return nil
+    }
+    
 
     var statusResult: Status? {
         if case let .statusResult(res) = self { return res as Status }
