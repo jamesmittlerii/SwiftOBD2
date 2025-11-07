@@ -315,13 +315,35 @@ class ELM327 {
             try await Task.sleep(nanoseconds: 300_000_000)
 
             _ = try await sendCommand("ATE0")  // Echo off
+            
+            // Set the transmit header to CAN ID 0x7E0 (Engine ECU request address)
             _ = try await sendCommand("ATSH7E0")
+
+            // Set CAN Receive Address filter to 0x7E8 (Engine ECU response address)
             _ = try await sendCommand("ATCRA7E8")
+
+            // Turn off spaces in responses (S0 = "Spacing Off")
+            // Makes parsing cleaner and reduces payload size
             _ = try await okResponse("ATS0")
+
+            // Turn off linefeeds (L0)
+            // prevents extra 0x0A characters in responses
             _ = try await okResponse("ATL0")
+
+            // Turn on headers (H1)
+            // include CAN ID, DLC, and header bytes in responses — needed if you parse frames manually
             _ = try await okResponse("ATH1")
+
+            // Automatic protocol detection (SP0)
+            // ECU automatically selects the correct OBD-II protocol
             _ = try await okResponse("ATSP0")
+
+            // Adaptive Timing mode 1 (AT1)
+            // automatically adjusts timeout based on ECU response times
             _ = try await okResponse("ATAT1")
+
+            // Set timeout to 0x0A (10 * 4 ms = 40 ms)
+            // (STxx sets the inter-byte timeout for OBD responses)
             _ = try await okResponse("ATST0A")
             //_ = try await okResponse("STI")
             //_ = try await okResponse("VTI")

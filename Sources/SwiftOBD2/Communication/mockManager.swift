@@ -114,27 +114,49 @@ class MOCKComm: CommProtocol {
             let action = command.dropFirst(2)
             var response = {
                 switch action {
+
                 case " SH 7E0", "D", "L0", "AT1", "SP0", "SP6", "STFF", "S0":
                     return ["OK"]
+
                 case "Z":
                     return ["ELM327 v1.5"]
+
                 case "H1":
                     ecuSettings.headerOn = true
                     return ["OK"]
+
                 case "H0":
                     ecuSettings.headerOn = false
                     return ["OK"]
+
                 case "E1":
                     ecuSettings.echo = true
                     return ["OK"]
+
                 case "E0":
                     ecuSettings.echo = false
                     return ["OK"]
+
                 case "DPN":
                     return ["06"]
+
                 case "RV":
                     return [String(Double.random(in: 12.0 ... 14.0))]
+
+                // ✅ Handle ATSTxx (timeout byte)
                 default:
+                    if action.hasPrefix("ST") {
+                        let hexByte = String(action.dropFirst(2))   // get the "xx"
+
+                        // Validate it is a 2-digit hex value
+                        if let _ = UInt8(hexByte, radix: 16) {
+                            //ecuSettings.timeout = hexByte
+                            return ["OK"]
+                        } else {
+                            return ["NO DATA"]  // malformed timeout
+                        }
+                    }
+
                     return ["NO DATA"]
                 }
             }()
