@@ -62,6 +62,9 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
 
     private var cancellables = Set<AnyCancellable>()
 
+    // Keep a weak reference to BLEManager (only valid when using Bluetooth)
+    private weak var bleManagerRef: BLEManager?
+
     /// Initializes the OBDService object.
     ///
     /// - Parameters:
@@ -78,6 +81,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         switch connectionType {
         case .bluetooth:
             let bleManager = BLEManager()
+            bleManagerRef = bleManager
             elm327 = ELM327(comm: bleManager)
         case .wifi:
             let resolvedHost = host ?? "192.168.0.10"
@@ -88,6 +92,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         }
 #endif
         elm327.obdDelegate = self
+        bindPeripheralIfNeeded()
     }
 
     // MARK: - Connection Handling
@@ -98,6 +103,14 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             self.connectionState = state
             if oldState != state {
                 OBDLogger.shared.logConnectionChange(from: oldState, to: state)
+            }
+
+            // Clear connectedPeripheral on terminal/disconnected states
+            switch state {
+            case .disconnected, .error:
+                self.connectedPeripheral = nil
+            default:
+                break
             }
         }
     }
@@ -155,21 +168,45 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     private func switchConnectionType(_ connectionType: ConnectionType) {
         stopConnection()
         initializeELM327()
+        bindPeripheralIfNeeded()
     }
 
     private func initializeELM327() {
         switch connectionType {
         case .bluetooth:
             let bleManager = BLEManager()
+            bleManagerRef = bleManager
             elm327 = ELM327(comm: bleManager)
         case .wifi:
             let resolvedHost = wifiHost ?? "192.168.4.207"
             let resolvedPort = wifiPort ?? 35000
             elm327 = ELM327(comm: WifiManager(host: resolvedHost, port: resolvedPort))
+            bleManagerRef = nil
+            connectedPeripheral = nil
         case .demo:
             elm327 = ELM327(comm: MOCKComm())
+            bleManagerRef = nil
+            connectedPeripheral = nil
         }
         elm327.obdDelegate = self
+    }
+
+    // Subscribe to BLE peripheral updates when using Bluetooth
+    private func bindPeripheralIfNeeded() {
+        // FIX: Set<AnyCancellable> doesn’t support removeAll(where:)
+        // Just clear the set (subscriptions will be released and canceled)
+        cancellables.removeAll()
+
+        guard let ble = bleManagerRef else { return }
+
+        // Expose a publisher from BLEManager to observe connected peripheral
+        // and mirror to OBDService.connectedPeripheral
+        ble.peripheralPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] peripheral in
+                self?.connectedPeripheral = peripheral
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Request Handling
@@ -388,10 +425,6 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         }
     }
 
-    //    public func switchToDemoMode(_ isDemoMode: Bool) {
-    //        elm327.switchToDemoMode(isDemoMode)
-    //    }
-
     /// Sends a raw command to the vehicle and returns the raw response.
     /// - Parameter message: The raw command to send.
     /// - Returns: The raw response from the vehicle.
@@ -421,59 +454,6 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             throw OBDServiceError.scanFailed(underlyingError: error)
         }
     }
-
-//    public func test() {
-//        if let resourcePath = Bundle.module.resourcePath {
-//               print("Bundle resources path: \(resourcePath)")
-//               let files = try? FileManager.default.contentsOfDirectory(atPath: resourcePath)
-//               print("Files in bundle: \(files ?? [])")
-//           }
-//        // Get the path for the JSON file within the app's bundle
-//        guard let path = Bundle.module.path(forResource: "commands", ofType: "json") else {
-//            print("Error: commands.json file not found in the bundle.")
-//            return
-//        }
-//
-//        // Load the file data
-//        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
-//            print("Error: Unable to load data from commands.json.")
-//            return
-//        }
-//
-//        do {
-//                // Load the JSON
-//                let data = try Data(contentsOf: URL(fileURLWithPath: path))
-//
-//                // Decode the JSON into an array of dictionaries to handle flexible structures
-//                guard var rawCommands = try JSONSerialization.jsonObject(with: data, options: []) as? [[String: Any]] else {
-//                    print("Error: Invalid JSON format.")
-//                    return
-//                }
-//
-//                // Edit the `decoder` field
-//                rawCommands = rawCommands.map { command in
-//                    var updatedCommand = command
-//                    if let decoder = command["decoder"] as? [String: Any], let firstKey = decoder.keys.first {
-//                        updatedCommand["decoder"] = firstKey // Set the first key as the string value
-//                    } else {
-//                        updatedCommand["decoder"] = "none" // Default to "none" if no keys exist
-//                    }
-//                    return updatedCommand
-//                }
-//
-//                // Convert back to JSON data
-//                let updatedData = try JSONSerialization.data(withJSONObject: rawCommands, options: .prettyPrinted)
-//
-//                // Save the updated JSON to a file
-//                let outputPath = FileManager.default.temporaryDirectory.appendingPathComponent("commands_updated.json")
-//                try updatedData.write(to: outputPath)
-//
-//                print("Modified commands.json saved to: \(outputPath.path)")
-//            } catch {
-//                print("Error processing commands.json: \(error)")
-//            }
-//    }
-
 }
 
 public enum OBDServiceError: Error {

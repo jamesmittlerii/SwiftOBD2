@@ -57,7 +57,6 @@ enum BLEConstants {
 }
 
 class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
-    private let peripheralSubject = PassthroughSubject<CBPeripheral, Never>()
     // Replaced with centralized logging - see connectionStateDidChange for usage
 
     static let RestoreIdentifierKey: String = "OBD2Adapter"
@@ -65,9 +64,13 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
     // MARK: Properties
 
     @Published var connectionState: ConnectionState = .disconnected
-
     var connectionStatePublisher: Published<ConnectionState>.Publisher { $connectionState }
 
+    // Expose connected CBPeripheral via Combine
+    @Published private(set) var connectedPeripheral: CBPeripheral?
+    public var peripheralPublisher: AnyPublisher<CBPeripheral?, Never> {
+        $connectedPeripheral.eraseToAnyPublisher()
+    }
 
     public weak var obdDelegate: OBDServiceDelegate?
 
@@ -107,6 +110,14 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
         characteristicHandler = BLECharacteristicHandler(messageProcessor: messageProcessor)
         peripheralManager = BLEPeripheralManager(characteristicHandler: characteristicHandler)
         peripheralScanner = BLEPeripheralScanner()
+
+        // Mirror peripheralManager.connectedPeripheral into our published property
+        peripheralManager.$connectedPeripheral
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] peripheral in
+                self?.connectedPeripheral = peripheral
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Central Manager Control Methods
@@ -145,6 +156,7 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
         case .poweredOff:
             obdWarning("Bluetooth powered off", category: .bluetooth)
             peripheralManager.connectedPeripheral = nil
+            connectedPeripheral = nil
             let oldState = connectionState
             connectionState = .disconnected
             OBDLogger.shared.logConnectionChange(from: oldState, to: connectionState)
@@ -194,6 +206,7 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
     func didConnect(_: CBCentralManager, peripheral: CBPeripheral) {
         obdInfo("Connected to peripheral: \(peripheral.name ?? "Unnamed")", category: .bluetooth)
         peripheralManager.setPeripheral(peripheral)
+        // connectedPeripheral will mirror via the subscription to peripheralManager.$connectedPeripheral
         // Note: connectionState will be set to .connectedToAdapter in peripheralManager delegate
     }
 
@@ -225,7 +238,7 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
         if let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral], let peripheral = peripherals.first {
             obdDebug("Restoring peripheral: \(peripherals[0].name ?? "Unnamed")", category: .bluetooth)
             peripheralManager.setPeripheral(peripheral)
-
+            // Mirror will update connectedPeripheral via subscription
         }
     }
 
@@ -349,6 +362,9 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
                 self.obdDelegate?.connectionStateChanged(state: .disconnected)
             }
         }
+        // Ensure we clear the connected peripheral
+        peripheralManager.connectedPeripheral = nil
+        connectedPeripheral = nil
     }
 }
 
