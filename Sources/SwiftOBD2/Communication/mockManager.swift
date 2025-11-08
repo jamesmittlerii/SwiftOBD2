@@ -235,6 +235,8 @@ extension OBDCommand {
                     return "20 90 07 E0 11 00"
                 case .pidsC:
                     return "40 FA DC 80 00 00"
+             case .controlModuleVoltage:
+                 return "42 35 04"
              case .fuelStatus:
                  return "03 02 04"
                 case .rpm:
