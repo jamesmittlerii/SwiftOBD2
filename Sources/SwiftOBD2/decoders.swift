@@ -27,21 +27,21 @@ public enum MeasurementUnit: String, Codable {
 }
 
 public struct Status: Codable, Hashable {
-    var MIL: Bool = false
+    public var MIL: Bool = false
     public var dtcCount: UInt8 = 0
-    var ignitionType: String = ""
+    public var ignitionType: String = ""
 
-    var misfireMonitoring = StatusTest()
-    var fuelSystemMonitoring = StatusTest()
-    var componentMonitoring = StatusTest()
+    public var misfireMonitoring = StatusTest()
+    public var fuelSystemMonitoring = StatusTest()
+    public var componentMonitoring = StatusTest()
 }
 
-struct StatusTest: Codable, Hashable {
-    var name: String = ""
-    var supported: Bool = false
-    var ready: Bool = false
+public struct StatusTest: Codable, Hashable {
+    public var name: String = ""
+    public var supported: Bool = false
+    public var ready: Bool = false
 
-    init(_ name: String = "", _ supported: Bool = false, _ ready: Bool = false)
+    public init(_ name: String = "", _ supported: Bool = false, _ ready: Bool = false)
     {
         self.name = name
         self.supported = supported
