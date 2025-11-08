@@ -567,7 +567,9 @@ extension ELM327 {
                 // Ex.
                 //        || ||
                 // 7E8 06 41 00 BE 7F B8 13
-                guard let supportedPidsByECU = parseResponse(response) else {
+                
+                let offset = UInt8(pidGetter.properties.command.dropFirst(2), radix: 16) ?? 0
+                guard let supportedPidsByECU = parseResponse(response, offset: offset) else {
                     continue
                 }
 
@@ -594,20 +596,20 @@ extension ELM327 {
         return Array(Set(supportedPIDs))
     }
 
-    private func parseResponse(_ response: [String]) -> Set<String>? {
+    private func parseResponse(_ response: [String], offset: UInt8 = 0) -> Set<String>? {
         guard let ecuData = try? canProtocol?.parse(response).first?.data else {
             return nil
         }
         let binaryData = BitArray(data: ecuData.dropFirst()).binaryArray
-        return extractSupportedPIDs(binaryData)
+        return extractSupportedPIDs(binaryData, offset: offset)
     }
 
-    func extractSupportedPIDs(_ binaryData: [Int]) -> Set<String> {
+    func extractSupportedPIDs(_ binaryData: [Int], offset: UInt8 = 0) -> Set<String> {
         var supportedPIDs: Set<String> = []
 
         for (index, value) in binaryData.enumerated() {
             if value == 1 {
-                let pid = String(format: "%02X", index + 1)
+                let pid = String(format: "%02X", Int(offset) + index + 1)
                 supportedPIDs.insert(pid)
             }
         }
