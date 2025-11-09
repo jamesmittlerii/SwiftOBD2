@@ -27,13 +27,9 @@ public enum MeasurementUnit: String, Codable {
 }
 
 public struct Status: Codable, Hashable {
-    public var MIL: Bool = false
-    public var dtcCount: UInt8 = 0
-    public var ignitionType: String = ""
-
-    public var misfireMonitoring = StatusTest()
-    public var fuelSystemMonitoring = StatusTest()
-    public var componentMonitoring = StatusTest()
+    public let milOn: Bool
+     public let dtcCount: Int
+     public let monitors: [ReadinessMonitor]
 }
 
 public struct StatusTest: Codable, Hashable {
@@ -942,50 +938,75 @@ struct UASDecoder: Decoder {
     }
 }
 
+public struct ReadinessMonitor: Codable, Hashable {
+    public let name: String
+    public let supported: Bool
+    public let ready: Bool?
+}
+
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        return indices.contains(index) ? self[index] : nil
+    }
+}
+
 struct StatusDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<
         DecodeResult, DecodeError
     > {
-        let IGNITIONTYPE = ["Spark", "Compression"]
-
-        // convert to binaryarray
-        let bits = BitArray(data: data)
-
-        var output = Status()
-        output.MIL = bits.binaryArray[0] == 1
-        output.dtcCount = bits.value(at: 1..<8)
-        output.ignitionType = IGNITIONTYPE[bits.binaryArray[12]]
-
-        // load the 3 base tests that are always present
-
-        for (index, name) in baseTests.reversed().enumerated() {
-            processBaseTest(name, index, bits, &output)
-        }
+        
+        let bytes = [UInt8](data)
+            
+            
+            
+            let milAndCount = bytes[0]
+            let milOn = (milAndCount & 0x80) != 0
+            let dtcCount = Int(milAndCount & 0x7F)
+            
+            // Readiness bytes (A, B, C)
+            let A = bytes[safe: 1] ?? 0
+            let B = bytes[safe: 2] ?? 0
+            let C = bytes[safe: 3] ?? 0   // Some ECUs omit this
+            
+        var monitors: [ReadinessMonitor] = []
+        let isDiesel = (A & 0x08) != 0
+        
+            if isDiesel {
+                // Diesel monitors (Compression Ignition)
+                monitors = [
+                    .init(name: "Misfire", supported: true, ready: (A & 0x01) == 0),
+                    .init(name: "Fuel System", supported: true, ready: (A & 0x02) == 0),
+                    .init(name: "Comprehensive Components", supported: true, ready: (A & 0x04) == 0),
+                    .init(name: "NMHC Catalyst", supported: (A & 0x08) != 0, ready: (A & 0x08) == 0),
+                    .init(name: "NOx/SCR Monitor", supported: (A & 0x10) != 0, ready: (A & 0x10) == 0),
+                    .init(name: "Boost Pressure System", supported: (A & 0x20) != 0, ready: (A & 0x20) == 0),
+                    .init(name: "Exhaust Gas Sensor", supported: (A & 0x40) != 0, ready: (A & 0x40) == 0),
+                    .init(name: "PM Filter Monitor", supported: (A & 0x80) != 0, ready: (A & 0x80) == 0),
+                    .init(name: "EGR/VVT System", supported: (B & 0x04) != 0, ready: (B & 0x04) == 0)
+                ]
+            } else {
+                // Spark Ignition (Gasoline)
+                monitors = [
+                    .init(name: "Misfire", supported: true, ready: (A & 0x01) == 0),
+                    .init(name: "Fuel System", supported: true, ready: (A & 0x02) == 0),
+                    .init(name: "Comprehensive Components", supported: true, ready: (A & 0x04) == 0),
+                    .init(name: "Catalyst", supported: (A & 0x08) != 0, ready: (A & 0x08) == 0),
+                    .init(name: "Heated Catalyst", supported: (A & 0x10) != 0, ready: (A & 0x10) == 0),
+                    .init(name: "Evaporative System", supported: (A & 0x20) != 0, ready: (A & 0x20) == 0),
+                    .init(name: "Secondary Air System", supported: (A & 0x40) != 0, ready: (A & 0x40) == 0),
+                    .init(name: "A/C Refrigerant", supported: (A & 0x80) != 0, ready: (A & 0x80) == 0),
+                    .init(name: "O₂ Sensor", supported: (B & 0x01) != 0, ready: (B & 0x01) == 0),
+                    .init(name: "O₂ Heater", supported: (B & 0x02) != 0, ready: (B & 0x02) == 0),
+                    .init(name: "EGR System", supported: (B & 0x04) != 0, ready: (B & 0x04) == 0)
+                ]
+            }
+            
+            let output =  Status(milOn: milOn, dtcCount: dtcCount, monitors: monitors)
+        
         return .success(.statusResult(output))
     }
 
-    func processBaseTest(
-        _ testName: String,
-        _ index: Int,
-        _ bits: BitArray,
-        _ output: inout Status
-    ) {
-        let test = StatusTest(
-            testName,
-            bits.binaryArray[13 + index] != 0,
-            bits.binaryArray[9 + index] == 0
-        )
-        switch testName {
-        case "MISFIRE_MONITORING":
-            output.misfireMonitoring = test
-        case "FUEL_SYSTEM_MONITORING":
-            output.fuelSystemMonitoring = test
-        case "COMPONENT_MONITORING":
-            output.componentMonitoring = test
-        default:
-            break
-        }
-    }
+  
 }
 
 func parseDTC(_ data: Data) -> TroubleCodeMetadata? {
