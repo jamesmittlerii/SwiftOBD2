@@ -230,7 +230,7 @@ extension OBDCommand {
                 case .pidsA:
                     return "00 BE 3F A8 13 00"
                 case .status:
-                    return "01 12 34 56 78 00"
+                    return "01 00 07 E5 00"
                 case .pidsB:
                     return "20 90 07 E0 11 00"
                 case .pidsC:

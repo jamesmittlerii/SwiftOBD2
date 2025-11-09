@@ -476,7 +476,6 @@ public struct MeasurementResult: Equatable {
 	}
 }
 
-
 extension MeasurementResult: Comparable {
     public static func < (lhs: MeasurementResult, rhs: MeasurementResult) -> Bool {
         guard lhs.unit == rhs.unit else { return false }

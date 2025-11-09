@@ -951,62 +951,63 @@ extension Array {
 }
 
 struct StatusDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<
-        DecodeResult, DecodeError
-    > {
-        
+    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = [UInt8](data)
-            
-            
-            
-            let milAndCount = bytes[0]
-            let milOn = (milAndCount & 0x80) != 0
-            let dtcCount = Int(milAndCount & 0x7F)
-            
-            // Readiness bytes (A, B, C)
-            let A = bytes[safe: 1] ?? 0
-            let B = bytes[safe: 2] ?? 0
-            let C = bytes[safe: 3] ?? 0   // Some ECUs omit this
-            
-        var monitors: [ReadinessMonitor] = []
+        guard bytes.count >= 4 else {
+            return .failure(.invalidData)
+        }
+
+        // Byte 0: MIL + DTC count
+        let milAndCount = bytes[0]
+        let milOn = (milAndCount & 0x80) != 0
+        let dtcCount = Int(milAndCount & 0x7F)
+
+        // Bytes 1-3: readiness and engine-type bits
+        let A = bytes[safe: 1] ?? 0   // Common tests
+        let B = bytes[safe: 2] ?? 0   // Engine-type + monitor availability
+        let C = bytes[safe: 3] ?? 0   // Monitor completeness (optional)
+
+        // Engine-type bit → B3 (0 = spark, 1 = compression)
         let isDiesel = (A & 0x08) != 0
-        
-            if isDiesel {
-                // Diesel monitors (Compression Ignition)
-                monitors = [
-                    .init(name: "Misfire", supported: true, ready: (A & 0x01) == 0),
-                    .init(name: "Fuel System", supported: true, ready: (A & 0x02) == 0),
-                    .init(name: "Comprehensive Components", supported: true, ready: (A & 0x04) == 0),
-                    .init(name: "NMHC Catalyst", supported: (A & 0x08) != 0, ready: (A & 0x08) == 0),
-                    .init(name: "NOx/SCR Monitor", supported: (A & 0x10) != 0, ready: (A & 0x10) == 0),
-                    .init(name: "Boost Pressure System", supported: (A & 0x20) != 0, ready: (A & 0x20) == 0),
-                    .init(name: "Exhaust Gas Sensor", supported: (A & 0x40) != 0, ready: (A & 0x40) == 0),
-                    .init(name: "PM Filter Monitor", supported: (A & 0x80) != 0, ready: (A & 0x80) == 0),
-                    .init(name: "EGR/VVT System", supported: (B & 0x04) != 0, ready: (B & 0x04) == 0)
-                ]
-            } else {
-                // Spark Ignition (Gasoline)
-                monitors = [
-                    .init(name: "Misfire", supported: true, ready: (A & 0x01) == 0),
-                    .init(name: "Fuel System", supported: true, ready: (A & 0x02) == 0),
-                    .init(name: "Comprehensive Components", supported: true, ready: (A & 0x04) == 0),
-                    .init(name: "Catalyst", supported: (A & 0x08) != 0, ready: (A & 0x08) == 0),
-                    .init(name: "Heated Catalyst", supported: (A & 0x10) != 0, ready: (A & 0x10) == 0),
-                    .init(name: "Evaporative System", supported: (A & 0x20) != 0, ready: (A & 0x20) == 0),
-                    .init(name: "Secondary Air System", supported: (A & 0x40) != 0, ready: (A & 0x40) == 0),
-                    .init(name: "A/C Refrigerant", supported: (A & 0x80) != 0, ready: (A & 0x80) == 0),
-                    .init(name: "O₂ Sensor", supported: (B & 0x01) != 0, ready: (B & 0x01) == 0),
-                    .init(name: "O₂ Heater", supported: (B & 0x02) != 0, ready: (B & 0x02) == 0),
-                    .init(name: "EGR System", supported: (B & 0x04) != 0, ready: (B & 0x04) == 0)
-                ]
-            }
-            
-            let output =  Status(milOn: milOn, dtcCount: dtcCount, monitors: monitors)
-        
+
+        var monitors: [ReadinessMonitor] = []
+
+        if isDiesel {
+            // Compression-ignition (diesel)
+            monitors = [
+                .init(name: "Misfire", supported: true, ready: (A & 0x10) == 0),
+                .init(name: "Fuel System", supported: true, ready: (A & 0x20) == 0),
+                .init(name: "Comprehensive Components", supported: true, ready: (A & 0x40) == 0),
+                .init(name: "NMHC catalyst", supported: (B & 0x01) != 0, ready: (C & 0x01) == 0),
+                .init(name: "HNOx/SCR Catalyst", supported: (B & 0x02) != 0, ready: (C & 0x02) == 0),
+                .init(name: "Boost pressure", supported: (B & 0x08) != 0, ready: (C & 0x08) == 0),
+                .init(name: "Exhaust gas", supported: (B & 0x20) != 0, ready: (C & 0x20) == 0),
+                .init(name: "PM filter", supported: (B & 0x40) != 0, ready: (C & 0x40) == 0),
+                .init(name: "EGR/VVT System", supported: (B & 0x80) != 0, ready: (C & 0x80) == 0)
+            ]
+        } else {
+            // Spark-ignition (gasoline)
+            monitors = [
+                .init(name: "Misfire", supported: true, ready: (A & 0x10) == 0),
+                .init(name: "Fuel System", supported: true, ready: (A & 0x20) == 0),
+                .init(name: "Comprehensive Components", supported: true, ready: (A & 0x40) == 0),
+                .init(name: "Catalyst", supported: (B & 0x01) != 0, ready: (C & 0x01) == 0),
+                .init(name: "Heated Catalyst", supported: (B & 0x02) != 0, ready: (C & 0x02) == 0),
+                .init(name: "Evaporative System", supported: (B & 0x04) != 0, ready: (C & 0x04) == 0),
+                .init(name: "Secondary Air System", supported: (B & 0x08) != 0, ready: (C & 0x08) == 0),
+                .init(name: "O₂ Sensor", supported: (B & 0x20) != 0, ready: (C & 0x20) == 0),
+                .init(name: "O₂ Heater", supported: (B & 0x40) != 0, ready: (C & 0x40) == 0),
+                .init(name: "EGR/VVT System", supported: (B & 0x80) != 0, ready: (C & 0x80) == 0)
+            ]
+        }
+
+        let output = Status(milOn: milOn,
+                            dtcCount: dtcCount,
+                           // engineType: isDiesel ? .diesel : .spark,
+                            monitors: monitors)
+
         return .success(.statusResult(output))
     }
-
-  
 }
 
 func parseDTC(_ data: Data) -> TroubleCodeMetadata? {
