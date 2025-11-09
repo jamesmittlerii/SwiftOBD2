@@ -32,7 +32,7 @@ class MOCKComm: CommProtocol {
     var ecuSettings: MockECUSettings = .init()
 
     func sendCommand(_ command: String, retries: Int = 3) async throws -> [String] {
-        logger.info("Sending command: \(command)")
+        obdInfo("Sending command: \(command)")
         var header = ""
 
         let prefix = String(command.prefix(2))
@@ -139,6 +139,9 @@ class MOCKComm: CommProtocol {
 
                 case "DPN":
                     return ["06"]
+                    
+                case "AL":
+                    return ["OK"]
 
                 case "RV":
                     return [String(Double.random(in: 12.0 ... 14.0))]
@@ -396,7 +399,8 @@ extension OBDCommand {
         case .mode9(let command):
             switch command {
             case .PIDS_9A:
-                    return "00 55 40 00 00 00"
+                  //  return "00 55 40 00 00 00"
+                   return "00 55 40 57 F0"
             case .VIN:
                 return "02 01 31 4E 34 41 4C 33 41 50 37 44 43 31 39 39 35 38 33"
             default:

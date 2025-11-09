@@ -134,9 +134,14 @@ class ELM327 {
         querySupportedPIDs: Bool = true
     ) async throws -> OBDInfo {
         //        var obdProtocol: PROTOCOL?
-        let detectedProtocol = try await detectProtocol(
-            preferredProtocol: preferredProtocol
-        )
+        
+        
+        let detectedProtocol: PROTOCOL
+        if let preferredProtocol {
+            detectedProtocol = preferredProtocol
+        } else {
+            detectedProtocol = try await detectProtocol()
+        }
 
         //        guard let obdProtocol = detectedProtocol else {
         //            throw SetupError.noProtocolFound
@@ -317,10 +322,10 @@ class ELM327 {
             _ = try await sendCommand("ATE0")  // Echo off
             
             // Set the transmit header to CAN ID 0x7E0 (Engine ECU request address)
-            _ = try await sendCommand("ATSH7E0")
+            //_ = try await sendCommand("ATSH7E0")
 
             // Set CAN Receive Address filter to 0x7E8 (Engine ECU response address)
-            _ = try await sendCommand("ATCRA7E8")
+           _ = try await sendCommand("ATCRA7E8")
 
             // Turn off spaces in responses (S0 = "Spacing Off")
             // Makes parsing cleaner and reduces payload size
@@ -337,14 +342,17 @@ class ELM327 {
             // Automatic protocol detection (SP0)
             // ECU automatically selects the correct OBD-II protocol
             _ = try await okResponse("ATSP0")
-
+            
+            
             // Adaptive Timing mode 1 (AT1)
             // automatically adjusts timeout based on ECU response times
             _ = try await okResponse("ATAT1")
+            _ = try await okResponse("ATAL") // NEW XX
 
             // Set timeout to 0x0A (10 * 4 ms = 40 ms)
             // (STxx sets the inter-byte timeout for OBD responses)
             _ = try await okResponse("ATST0A")
+           // _ = try await okResponse("ATST64")
             //_ = try await okResponse("STI")
             //_ = try await okResponse("VTI")
             //_ = try await okResponse("ATD")
@@ -384,7 +392,13 @@ class ELM327 {
     func sendCommand(_ message: String, retries: Int = 1) async throws
         -> [String]
     {
-        try await comm.sendCommand(message, retries: retries)
+        
+        let response = try await comm.sendCommand(message, retries: retries)
+           obdDebug("→ Sent: \(message)\n← Response: \(response.joined(separator: " | "))")
+           return response
+        
+        
+       // try await comm.sendCommand(message, retries: retries)
     }
 
     private func okResponse(_ message: String) async throws -> [String] {
