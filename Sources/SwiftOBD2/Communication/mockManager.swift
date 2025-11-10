@@ -22,6 +22,11 @@ struct MockECUSettings {
     var vinNumber = ""
 }
 
+// Per-mock-session evolving state
+private struct MockSessionState {
+    var testStart: Date?
+}
+
 class MOCKComm: CommProtocol {
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.example.app", category: "MOCKComm")
 
@@ -30,6 +35,7 @@ class MOCKComm: CommProtocol {
     var obdDelegate: OBDServiceDelegate?
 
     var ecuSettings: MockECUSettings = .init()
+    private var sessionState = MockSessionState()
 
     func sendCommand(_ command: String, retries: Int = 3) async throws -> [String] {
         obdInfo("Sending command: \(command)")
@@ -45,7 +51,7 @@ class MOCKComm: CommProtocol {
                 let index = command.index(command.startIndex, offsetBy: i)
                 let nextIndex = command.index(command.startIndex, offsetBy: i + 2)
                 let subCommand = prefix + String(command[index..<nextIndex])
-                guard let value = OBDCommand.mockResponse(forCommand: subCommand) else {
+                guard let value = makeMockResponse(for: subCommand) else {
                     return ["No Data"]
 
                 }
@@ -187,7 +193,7 @@ class MOCKComm: CommProtocol {
             }
             return [response]
         } else {
-            guard var response = OBDCommand.mockResponse(forCommand: command) else {
+            guard var response = makeRawMockResponse(for: command) else {
                 return ["No Data"]
             }
             response = command + response  + "\r\n\r\n>"
@@ -214,16 +220,15 @@ class MOCKComm: CommProtocol {
     }
 }
 
-extension OBDCommand {
-    // Persistent state for coolant temperature ramp and speed timeline
-    fileprivate static var testStart: Date?
+// MARK: - Per-session mock generation (moved from OBDCommand extension)
 
-    // Reusable speed generator using the shared timeline
-    fileprivate static func currentMockSpeed(now: Date = Date()) -> Double {
-        if OBDCommand.testStart == nil {
-            OBDCommand.testStart = now
+private extension MOCKComm {
+    // Reusable speed generator using the per-session timeline
+    func currentMockSpeed(now: Date = Date()) -> Double {
+        if sessionState.testStart == nil {
+            sessionState.testStart = now
         }
-        let elapsed = now.timeIntervalSince(OBDCommand.testStart ?? now)
+        let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
 
         let rampDuration: TimeInterval = 15.0
         let minSpeed = 20.0
@@ -235,7 +240,7 @@ extension OBDCommand {
             // Linear ramp 0 → 20
             return max(0.0, min(minSpeed, (elapsed / rampDuration) * minSpeed))
         } else {
-            // Sine oscillation around midpoint with 10s period
+            // Sine oscillation around midpoint with 30s period
             let oscillationPeriod: TimeInterval = 30.0
             let phase = 2.0 * Double.pi * ((elapsed - rampDuration).truncatingRemainder(dividingBy: oscillationPeriod) / oscillationPeriod)
             return midpoint + amplitude * sin(phase)
@@ -243,7 +248,7 @@ extension OBDCommand {
     }
 
     // Reusable RPM generator based on speed and 3-gear model; reaches 8000 at top of each band
-    fileprivate static func currentMockRPM(fromSpeed speedValue: Double) -> Double {
+    func currentMockRPM(fromSpeed speedValue: Double) -> Double {
         if speedValue <= 0.5 {
             return 800.0 // idle
         } else if speedValue < 20.0 {
@@ -258,225 +263,223 @@ extension OBDCommand {
         }
     }
 
-    static func mockResponse(forCommand command: String) -> String? {
-
-        guard let obd2Command = self.from(command: command) else {
+    // Generates the per-PID payload (no header/length/service), similar to the old OBDCommand.mockResponse
+    func makeMockResponse(for command: String) -> String? {
+        guard let obd2Command = OBDCommand.from(command: command) else {
             obdWarning("Invalid mock command: \(command)", category: .communication)
             return "Invalid command"
         }
 
         switch obd2Command {
-            case .mode1(let command):
-             switch command {
-                case .pidsA:
-                    return "00 BE 3F A8 13 00"
-                case .status:
-                    return "01 00 07 E5 00"
-                case .pidsB:
-                    return "20 90 07 E0 11 00"
-                case .pidsC:
-                    return "40 FA DC 80 00 00"
-             case .controlModuleVoltage:
-                 return "42 35 04"
-             case .fuelStatus:
-                 return "03 02 04"
-                case .rpm:
-                    let speedValue = OBDCommand.currentMockSpeed()
-                    let rpmDouble = OBDCommand.currentMockRPM(fromSpeed: speedValue)
-                    let rpmClamped = min(8000.0, max(800.0, rpmDouble))
-                    let raw = Int(rpmClamped.rounded()) * 4 // OBD-II encoding for RPM
-
-                    let A = (raw >> 8) & 0xFF
-                    let B = raw & 0xFF
-
-                    let hexA = String(format: "%02X", A)
-                    let hexB = String(format: "%02X", B)
-
-                    return "0C" + " " + hexA + " " + hexB
-                case .speed:
-                    let speedValue = OBDCommand.currentMockSpeed()
-                    let clamped = max(0.0, min(255.0, speedValue))
-                    let hexSpeed = String(format: "%02X", Int(clamped.rounded()))
-                    return "0D" + " " + hexSpeed
-                case .coolantTemp:
-                    // Ramp from 0 to 100°C over 60 seconds.
-                    let now = Date()
-                    if OBDCommand.testStart == nil {
-                        OBDCommand.testStart = now
-                    }
-                    let elapsed = now.timeIntervalSince(OBDCommand.testStart ?? now)
-                    let clamped = max(0.0, min(60.0, elapsed))
-                    let tempC = Int((clamped / 60.0) * 100.0) // 0…100
-                    // OBD-II PID 0105 encoding: A = tempC + 40
-                    let rawA = UInt8(max(0, min(140, tempC + 40)))
-                    let hexTemp = String(format: "%02X", rawA)
-                    return "05" + " " + hexTemp
-                case .maf:
-                    let maf = Int.random(in: 0...655) * 100
-                    let A = maf / 256
-                    let B = maf % 256
-
-                    let hexA = String(format: "%02X", A)
-                    let hexB = String(format: "%02X", B)
-
-                    return "10" + " " + hexA + " " + hexB
-                case .engineLoad:
-                    let load = Int.random(in: 0...100)
-                    let hexLoad = String(format: "%02X", load)
-                    return "04" + " " + hexLoad
-                case .throttlePos:
-                    // Align throttle position with RPM derived from speed/gears via shared helper.
-                    let speedValue = OBDCommand.currentMockSpeed()
-                    let rpmDouble = OBDCommand.currentMockRPM(fromSpeed: speedValue)
-                    let rpmClamped = min(8000.0, max(800.0, rpmDouble))
-                    // Map RPM (800..8000) → throttle (0..100) linearly
-                    let throttle = ((rpmClamped - 800.0) / (8000.0 - 800.0)) * 100.0
-                    let throttleByte = UInt8(max(0, min(100, Int(throttle.rounded()))))
-                    let hexPos = String(format: "%02X", throttleByte)
-                    return "11" + " " + hexPos
-                case .fuelLevel:
-                    // Start at 90% and decrease over time (1% every 10 seconds) until 0%.
-                    let now = Date()
-                    if OBDCommand.testStart == nil {
-                        OBDCommand.testStart = now
-                    }
-                    let elapsed = now.timeIntervalSince(OBDCommand.testStart ?? now)
-                    let drained = Int(elapsed / 10.0) // 1% per 10s
-                    let fuelPercent = max(0, 90 - drained)
-                    // OBD-II encoding: A = percent * 255 / 100
-                    let byte = UInt8(max(0, min(255, Int((Double(fuelPercent) * 255.0 / 100.0).rounded()))))
-                    let hexLevel = String(format: "%02X", byte)
-                    return "2F" + " " + hexLevel
-                case .fuelPressure:
-                    let pressure = Int.random(in: 0...765)
-                    let hexPressure = String(format: "%02X", pressure / 3)
-                    return "0A" + " " + hexPressure
-                case .intakeTemp:
-                    let temp = Int.random(in: 0...100) + 40
-                    let hexTemp = String(format: "%02X", temp)
-                    return "0F" + " " + hexTemp
-                case .timingAdvance:
-                    let advance = Int.random(in: 0...100)
-                    let hexAdvance = String(format: "%02X", advance / 2)
-                    return "0E" + " " + hexAdvance
-                case .intakePressure:
-                    let pressure = Int.random(in: 0...255)
-                    let hexPressure = String(format: "%02X", pressure)
-                    return "0B" + " " + hexPressure
-                case .barometricPressure:
-                    let pressure = Int.random(in: 0...255)
-                    let hexPressure = String(format: "%02X", pressure)
-                    return "33" + " " + hexPressure
-                case .fuelType:
-                    return "01 01"
-                case .fuelRailPressureDirect:
-                    let pressure = Int.random(in: 0...655) * 100
-                    let A = pressure / 256
-                    let B = pressure % 256
-
-                    let hexA = String(format: "%02X", A)
-                    let hexB = String(format: "%02X", B)
-                    return "23" + " " + hexA + " " + hexB
-                case .ethanoPercent:
-                    let fuel = Int.random(in: 0...100)
-                    let hexFuel = String(format: "%02X", fuel)
-                    return "52" + " " + hexFuel
-                case .engineOilTemp:
-                    let temp = Int.random(in: 0...100) + 40
-                    let hexTemp = String(format: "%02X", temp)
-                    return "5C" + " " + hexTemp
-                case .fuelInjectionTiming:
-                    let timing = Int.random(in: 0...655) * 100
-                    let A = timing / 256
-                    let B = timing % 256
-
-                    let hexA = String(format: "%02X", A)
-                    let hexB = String(format: "%02X", B)
-                    return "5D" + " " + hexA + " " + hexB
-                case .fuelRate:
-                    let rate = Int.random(in: 3...120)
-                    let A = rate / 256
-                    let B = rate % 256
-
-                    let hexA = String(format: "%02X", A)
-                    let hexB = String(format: "%02X", B)
-                    return "5E" + " " + hexA + " " + hexB
-                case .emissionsReq:
-                    return "01 01"
-                case .runTime:
-                    let runtime = Int.random(in: 0...655) * 100
-                    let A = runtime / 256
-                    let B = runtime % 256
-
-                    let hexA = String(format: "%02X", A)
-                    let hexB = String(format: "%02X", B)
-                    return "1F" + " " + hexA + " " + hexB
-                case .distanceSinceDTCCleared:
-                    let distance = Int.random(in: 100...6550)
-                 
-                    let A = distance / 256
-                    let B = distance % 256
-
-                    let hexA = String(format: "%02X", A)
-                    let hexB = String(format: "%02X", B)
-                    return "31" + " " + hexA + " " + hexB
-                case .distanceWMIL:
-
-                    let distance = Int.random(in: 100...6550)
-                    let A = distance / 256
-                    let B = distance % 256
-
-                    let hexA = String(format: "%02X", A)
-                    let hexB = String(format: "%02X", B)
-                    return "21" + " " + hexA + " " + hexB
-                case .warmUpsSinceDTCCleared:
-                    let warmUp = Int.random(in: 0...40)
-                    let hexWarmUp = String(format: "%02X", warmUp)
-                    return "30" + " 00 00 " + hexWarmUp
-                case .hybridBatteryLife:
-                    let life = Int.random(in: 100...65500)
-                 
-                    let A = life / 256
-                    let B = life % 256
-
-                    let hexA = String(format: "%02X", A)
-                    let hexB = String(format: "%02X", B)
-                    return "5B" + " " + hexA + " " + hexB
-                default:
-                    return nil
+        case .mode1(let command):
+            switch command {
+            case .pidsA:
+                return "00 BE 3F A8 13 00"
+            case .status:
+                return "01 00 07 E5 00"
+            case .pidsB:
+                return "20 90 07 E0 11 00"
+            case .pidsC:
+                return "40 FA DC 80 00 00"
+            case .controlModuleVoltage:
+                return "42 35 04"
+            case .fuelStatus:
+                return "03 02 04"
+            case .rpm:
+                let speedValue = currentMockSpeed()
+                let rpmDouble = currentMockRPM(fromSpeed: speedValue)
+                let rpmClamped = min(8000.0, max(800.0, rpmDouble))
+                let raw = Int(rpmClamped.rounded()) * 4 // OBD-II encoding for RPM
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
+                let hexA = String(format: "%02X", A)
+                let hexB = String(format: "%02X", B)
+                return "0C" + " " + hexA + " " + hexB
+            case .speed:
+                let speedValue = currentMockSpeed()
+                let clamped = max(0.0, min(255.0, speedValue))
+                let hexSpeed = String(format: "%02X", Int(clamped.rounded()))
+                return "0D" + " " + hexSpeed
+            case .coolantTemp:
+                // Ramp from 0 to 100°C over 60 seconds.
+                let now = Date()
+                if sessionState.testStart == nil {
+                    sessionState.testStart = now
+                }
+                let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
+                let clamped = max(0.0, min(60.0, elapsed))
+                let tempC = Int((clamped / 60.0) * 100.0) // 0…100
+                // OBD-II PID 0105 encoding: A = tempC + 40
+                let rawA = UInt8(max(0, min(140, tempC + 40)))
+                let hexTemp = String(format: "%02X", rawA)
+                return "05" + " " + hexTemp
+            case .maf:
+                let maf = Int.random(in: 0...655) * 100
+                let A = maf / 256
+                let B = maf % 256
+                let hexA = String(format: "%02X", A)
+                let hexB = String(format: "%02X", B)
+                return "10" + " " + hexA + " " + hexB
+            case .engineLoad:
+                let load = Int.random(in: 0...100)
+                let hexLoad = String(format: "%02X", load)
+                return "04" + " " + hexLoad
+            case .throttlePos:
+                // Align throttle position with RPM derived from speed/gears via shared helper.
+                let speedValue = currentMockSpeed()
+                let rpmDouble = currentMockRPM(fromSpeed: speedValue)
+                let rpmClamped = min(8000.0, max(800.0, rpmDouble))
+                // Map RPM (800..8000) → throttle (0..100) linearly
+                let throttle = ((rpmClamped - 800.0) / (8000.0 - 800.0)) * 100.0
+                let throttleByte = UInt8(max(0, min(100, Int(throttle.rounded()))))
+                let hexPos = String(format: "%02X", throttleByte)
+                return "11" + " " + hexPos
+            case .fuelLevel:
+                // Start at 90% and decrease over time (1% every 10 seconds) until 0%.
+                let now = Date()
+                if sessionState.testStart == nil {
+                    sessionState.testStart = now
+                }
+                let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
+                let drained = Int(elapsed / 10.0) // 1% per 10s
+                let fuelPercent = max(0, 90 - drained)
+                // OBD-II encoding: A = percent * 255 / 100
+                let byte = UInt8(max(0, min(255, Int((Double(fuelPercent) * 255.0 / 100.0).rounded()))))
+                let hexLevel = String(format: "%02X", byte)
+                return "2F" + " " + hexLevel
+            case .fuelPressure:
+                let pressure = Int.random(in: 0...765)
+                let hexPressure = String(format: "%02X", pressure / 3)
+                return "0A" + " " + hexPressure
+            case .intakeTemp:
+                let temp = Int.random(in: 0...100) + 40
+                let hexTemp = String(format: "%02X", temp)
+                return "0F" + " " + hexTemp
+            case .timingAdvance:
+                let advance = Int.random(in: 0...100)
+                let hexAdvance = String(format: "%02X", advance / 2)
+                return "0E" + " " + hexAdvance
+            case .intakePressure:
+                let pressure = Int.random(in: 0...255)
+                let hexPressure = String(format: "%02X", pressure)
+                return "0B" + " " + hexPressure
+            case .barometricPressure:
+                let pressure = Int.random(in: 0...255)
+                let hexPressure = String(format: "%02X", pressure)
+                return "33" + " " + hexPressure
+            case .fuelType:
+                return "01 01"
+            case .fuelRailPressureDirect:
+                let pressure = Int.random(in: 0...655) * 100
+                let A = pressure / 256
+                let B = pressure % 256
+                let hexA = String(format: "%02X", A)
+                let hexB = String(format: "%02X", B)
+                return "23" + " " + hexA + " " + hexB
+            case .ethanoPercent:
+                let fuel = Int.random(in: 0...100)
+                let hexFuel = String(format: "%02X", fuel)
+                return "52" + " " + hexFuel
+            case .engineOilTemp:
+                let temp = Int.random(in: 0...100) + 40
+                let hexTemp = String(format: "%02X", temp)
+                return "5C" + " " + hexTemp
+            case .fuelInjectionTiming:
+                let timing = Int.random(in: 0...655) * 100
+                let A = timing / 256
+                let B = timing % 256
+                let hexA = String(format: "%02X", A)
+                let hexB = String(format: "%02X", B)
+                return "5D" + " " + hexA + " " + hexB
+            case .fuelRate:
+                let rate = Int.random(in: 3...120)
+                let A = rate / 256
+                let B = rate % 256
+                let hexA = String(format: "%02X", A)
+                let hexB = String(format: "%02X", B)
+                return "5E" + " " + hexA + " " + hexB
+            case .emissionsReq:
+                return "01 01"
+            case .runTime:
+                let runtime = Int.random(in: 0...655) * 100
+                let A = runtime / 256
+                let B = runtime % 256
+                let hexA = String(format: "%02X", A)
+                let hexB = String(format: "%02X", B)
+                return "1F" + " " + hexA + " " + hexB
+            case .distanceSinceDTCCleared:
+                let distance = Int.random(in: 100...6550)
+                let A = distance / 256
+                let B = distance % 256
+                let hexA = String(format: "%02X", A)
+                let hexB = String(format: "%02X", B)
+                return "31" + " " + hexA + " " + hexB
+            case .distanceWMIL:
+                let distance = Int.random(in: 100...6550)
+                let A = distance / 256
+                let B = distance % 256
+                let hexA = String(format: "%02X", A)
+                let hexB = String(format: "%02X", B)
+                return "21" + " " + hexA + " " + hexB
+            case .warmUpsSinceDTCCleared:
+                let warmUp = Int.random(in: 0...40)
+                let hexWarmUp = String(format: "%02X", warmUp)
+                return "30" + " 00 00 " + hexWarmUp
+            case .hybridBatteryLife:
+                let life = Int.random(in: 100...65500)
+                let A = life / 256
+                let B = life % 256
+                let hexA = String(format: "%02X", A)
+                let hexB = String(format: "%02X", B)
+                return "5B" + " " + hexA + " " + hexB
+            default:
+                return nil
             }
+
         case .mode6(let command):
             switch command {
-                case .MIDS_A:
-                    return "00 C0 00 00 01 00"
-                case .MIDS_B:
-                    return "02 C0 00 00 01 00"
-                case .MIDS_C:
-                    return "04 C0 00 00 01 00"
-                case .MIDS_D:
-                    return "06 C0 00 00 01 00"
-                case .MIDS_E:
-                    return "08 C0 00 00 01 00"
-                case .MIDS_F:
-                    return "0A C0 00 00 01 00"
-                default:
-                    return nil
+            case .MIDS_A:
+                return "00 C0 00 00 01 00"
+            case .MIDS_B:
+                return "02 C0 00 00 01 00"
+            case .MIDS_C:
+                return "04 C0 00 00 01 00"
+            case .MIDS_D:
+                return "06 C0 00 00 01 00"
+            case .MIDS_E:
+                return "08 C0 00 00 01 00"
+            case .MIDS_F:
+                return "0A C0 00 00 01 00"
+            default:
+                return nil
             }
+
         case .mode9(let command):
             switch command {
             case .PIDS_9A:
-                   return "00 55 40 57 F0"
+                return "00 55 40 57 F0"
             case .VIN:
                 return "02 01 31 4E 34 41 4C 33 41 50 37 44 43 31 39 39 35 38 33"
             default:
                 return nil
             }
+
         default:
             obdDebug("No mock response for command: \(command)", category: .communication)
             return nil
         }
     }
+
+    // Handles the raw-text mock path used in the final else-branch of sendCommand
+    func makeRawMockResponse(for command: String) -> String? {
+        // Reuse makeMockResponse when possible; otherwise emulate a simple echo format
+        if let payload = makeMockResponse(for: command) {
+            return payload
+        }
+        return nil
+    }
 }
+
 //        case .O902: return  "10 14 49 02 01 31 4E 34 \r\n"
 //            + header + "21 41 4C 33 41 50 37 44 \r\n" + header + "22 43 31 39 39 35 38 33 \r\n\r\n>"
 extension String {
