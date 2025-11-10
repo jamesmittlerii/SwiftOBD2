@@ -353,15 +353,12 @@ private extension MOCKComm {
                 return "05" + " " + hexTemp
             case .maf:
                 // Approximate MAF (g/s) from RPM and a mild speed factor
-                // Normalize RPM 800..8000 to 0..1
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
                 let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
-                // Base 2..120 g/s scaled by rpm and load-ish term
                 let base = 2.0 + rpmN * 118.0
                 let withLoad = base * (0.8 + 0.4 * rpmN)
                 let mafGs = max(2.0, min(200.0, withLoad + smoothNoise(seed: 2, scale: 3.0)))
-                // Encode: value = (256*A + B)/100 g/s → raw = Int(mafGs * 100)
                 let raw = Int((mafGs * 100.0).rounded())
                 let A = (raw >> 8) & 0xFF
                 let B = raw & 0xFF
@@ -369,7 +366,6 @@ private extension MOCKComm {
                 let hexB = String(format: "%02X", B)
                 return "10" + " " + hexA + " " + hexB
             case .engineLoad:
-                // More realistic engine load modeled from RPM and throttle-like demand
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
                 let rpmClamped = min(8000.0, max(800.0, rpm))
@@ -389,8 +385,8 @@ private extension MOCKComm {
                 let hexA = String(format: "%02X", A)
                 return "04" + " " + hexA
             case .throttlePos:
-                // Model driver demand with smooth baseline + transients for accel/decel,
-                // and constraints for idle/cruise/WOT.
+                // Improved: allow WOT (>70%) at high RPM or strong acceleration,
+                // reduce cruise damping in those cases, keep idle min and small noise.
                 let now = Date()
                 let speed = currentMockSpeed(now: now)
                 let rpm = currentMockRPM(fromSpeed: speed)
@@ -398,64 +394,67 @@ private extension MOCKComm {
                 // Normalized RPM 0..1
                 let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
 
-                // Baseline driver demand: slow oscillation between 10% and ~55%
-                var demand = 0.32
-                demand += 0.18 * sin(sessionElapsed() * 0.12) // very slow wave
-                demand += 0.10 * sin(sessionElapsed() * 0.45 + 1.3) // mid wave
+                // Baseline driver demand: slow waves around ~30%
+                var demand = 0.30
+                demand += 0.16 * sin(sessionElapsed() * 0.10)
+                demand += 0.08 * sin(sessionElapsed() * 0.42 + 0.9)
 
-                // Accel tip-in: if speed is increasing (approx via derivative using lastTick),
-                // bias demand up briefly; if decreasing, bias down a bit.
-                var accelBias = 0.0
+                // Approximate longitudinal acceleration (km/h per second)
+                var accel: Double = 0
                 if let last = sessionState.lastTick {
                     let dt = max(0.001, now.timeIntervalSince(last))
                     let prevSpeed = currentMockSpeed(now: last)
-                    let dv = speed - prevSpeed // km/h
-                    let accel = dv / dt // km/h per second
-                    accelBias = max(-0.10, min(0.20, accel * 0.01)) // cap bias
+                    accel = (speed - prevSpeed) / dt
                 }
+
+                // Bias for accel/decel
+                let accelBias = max(-0.12, min(0.25, accel * 0.012))
                 demand += accelBias
 
-                // Idle minimum opening (throttle body not fully closed)
+                // Idle minimum opening
                 if rpm < 1100 && speed < 3 {
                     demand = max(demand, 0.08 + 0.02 * sin(sessionElapsed() * 1.2))
                 }
 
-                // At cruising speeds 40–80 km/h, keep moderate throttle unless RPM is high
-                if speed >= 40 && speed <= 80 {
-                    let cruiseTarget = 0.22 + 0.10 * rpmN // 22–32%
-                    demand = 0.7 * demand + 0.3 * cruiseTarget
+                // Detect high-load intent: high RPM or strong positive accel
+                let highLoad = (rpmN > 0.80) || (accel > 6.0) // ~+6 km/h per second
+
+                // Cruise damping (only when not in high load)
+                if speed >= 40 && speed <= 80 && !highLoad {
+                    let cruiseTarget = 0.22 + 0.10 * rpmN
+                    demand = 0.65 * demand + 0.35 * cruiseTarget
                 }
 
-                // Approach WOT at high RPM under acceleration
-                if rpmN > 0.8 {
-                    demand = max(demand, 0.65 + 0.25 * (rpmN - 0.8) / 0.2) // up to ~90%
+                // Enforce WOT tendency under high load
+                if highLoad {
+                    // Raise floor toward 70% and allow up to ~95% with RPM
+                    let wotFloor = 0.70
+                    let wotTop = 0.95
+                    let scaled = wotFloor + (wotTop - wotFloor) * min(1.0, (rpmN - 0.8) / 0.2)
+                    demand = max(demand, scaled)
                 }
 
                 // Small sensor noise
                 demand += smoothNoise(seed: 5.5, scale: 0.02)
 
-                // Clamp 0..1 and convert to percent 0..100
+                // Clamp and encode
                 demand = max(0.0, min(1.0, demand))
                 let percent = Int((demand * 100.0).rounded())
-
-                // Encode PID 0111: A = percent
                 let A = UInt8(max(0, min(100, percent)))
                 let hexPos = String(format: "%02X", A)
                 return "11" + " " + hexPos
             case .fuelLevel:
-                // Start at 90% and decrease over time (1% every 10 seconds) until 0%.
                 let now = Date()
                 if sessionState.testStart == nil {
                     sessionState.testStart = now
                 }
                 let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
-                let drained = Int(elapsed / 10.0) // 1% per 10s
+                let drained = Int(elapsed / 10.0)
                 let fuelPercent = max(0, 90 - drained)
                 let byte = UInt8(max(0, min(255, Int((Double(fuelPercent) * 255.0 / 100.0).rounded()))))
                 let hexLevel = String(format: "%02X", byte)
                 return "2F" + " " + hexLevel
             case .fuelPressure:
-                // Gentle drift around 400 kPa (encoded spec: A*3 = kPa)
                 let centerKPa = 400.0 + smoothNoise(seed: 6, scale: 25.0)
                 let kPa = max(200.0, min(600.0, centerKPa))
                 let A = UInt8(max(0, min(255, Int((kPa / 3.0).rounded()))))
@@ -468,32 +467,27 @@ private extension MOCKComm {
                 }
                 let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
                 let clamped = max(0.0, min(60.0, elapsed))
-                let tempC = Int((clamped / 60.0) * 70.0) // 0…70
+                let tempC = Int((clamped / 60.0) * 70.0)
                 let rawA = UInt8(max(0, min(140, tempC + 40)))
                 let hexTemp = String(format: "%02X", rawA)
                 return "0F" + " " + hexTemp
             case .timingAdvance:
-                // Positive at light load and moderate RPM, retards with high load
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
                 let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
-                // Reuse load logic lightly
                 var load = rpmN
                 if speedValue >= 40 && speedValue <= 80 {
                     let cruiseFactor = max(0.0, 1.0 - rpmN * 1.4)
                     load -= 0.20 * cruiseFactor
                 }
                 load = max(0.0, min(1.0, load))
-                // Base advance 10° at light load, drop toward -5° at high load/high rpm
                 var advance = 15.0 * (1.0 - load) - 5.0 * rpmN
                 advance += smoothNoise(seed: 7, scale: 1.0)
-                // Encode: A = (advance*2)+64 (per decoder expectation)
                 let raw = Int((advance * 2.0).rounded()) + 64
                 let A = UInt8(max(0, min(255, raw)))
                 let hexA = String(format: "%02X", A)
                 return "0E" + " " + hexA
             case .intakePressure:
-                // Lower under vacuum (idle/cruise), higher near WOT
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
                 let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
@@ -503,14 +497,12 @@ private extension MOCKComm {
                     load -= 0.20 * cruiseFactor
                 }
                 load = max(0.0, min(1.0, load))
-                // Map load to 25..95 kPa with small noise
                 var kPa = 25.0 + load * 70.0 + smoothNoise(seed: 8, scale: 2.0)
                 kPa = max(20.0, min(100.0, kPa))
                 let A = UInt8(max(0, min(255, Int(kPa.rounded()))))
                 let hexA = String(format: "%02X", A)
                 return "0B" + " " + hexA
             case .barometricPressure:
-                // Nearly constant (simulate altitude ~101 kPa) with tiny sensor noise
                 var kPa = 101.0 + smoothNoise(seed: 9, scale: 0.6)
                 kPa = max(95.0, min(105.0, kPa))
                 let A = UInt8(max(0, min(255, Int(kPa.rounded()))))
@@ -519,7 +511,6 @@ private extension MOCKComm {
             case .fuelType:
                 return "01 01"
             case .fuelRailPressureDirect:
-                // Scale with load and RPM; encode as 10 kPa units via (A*256+B)*10 kPa
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
                 let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
@@ -533,12 +524,10 @@ private extension MOCKComm {
                 let hexB = String(format: "%02X", B)
                 return "23" + " " + hexA + " " + hexB
             case .ethanoPercent:
-                // Fixed blend (e.g., E10 ~ 10%)
-                let A = UInt8(26) // ~10% of 255
+                let A = UInt8(26)
                 let hexA = String(format: "%02X", A)
                 return "52" + " " + hexA
             case .engineOilTemp:
-                // Rise from ambient 20°C toward 100°C over ~15 minutes with small noise
                 let t = sessionElapsed()
                 let target = 100.0
                 let ambient = 20.0
@@ -548,15 +537,12 @@ private extension MOCKComm {
                 let hexA = String(format: "%02X", rawA)
                 return "5C" + " " + hexA
             case .fuelInjectionTiming:
-                // Signed degrees BTDC/ATDC; tie to load and RPM
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
                 let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
                 let load = rpmN
-                var deg = 5.0 + 10.0 * (1.0 - load) - 6.0 * rpmN + smoothNoise(seed: 12, scale: 1.0) // +/- range
+                var deg = 5.0 + 10.0 * (1.0 - load) - 6.0 * rpmN + smoothNoise(seed: 12, scale: 1.0)
                 deg = max(-20.0, min(25.0, deg))
-                // Encode per typical: value = ((A*256)+B)/128 - 210 (depends on decoder; here use uas(0x1B) style 0.01?)
-                // We’ll map to 0.1° resolution: raw = (deg + 210) * 10
                 let raw = Int(((deg + 210.0) * 10.0).rounded())
                 let A = (raw >> 8) & 0xFF
                 let B = raw & 0xFF
@@ -564,14 +550,12 @@ private extension MOCKComm {
                 let hexB = String(format: "%02X", B)
                 return "5D" + " " + hexA + " " + hexB
             case .fuelRate:
-                // L/h roughly proportional to load and RPM
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
                 let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
                 let load = rpmN
                 var lph = 1.2 + 18.0 * load + 10.0 * rpmN + smoothNoise(seed: 13, scale: 0.8)
                 lph = max(0.5, min(60.0, lph))
-                // Encode: value = ((A*256)+B)/20 → raw = lph*20
                 let raw = Int((lph * 20.0).rounded())
                 let A = (raw >> 8) & 0xFF
                 let B = raw & 0xFF
@@ -581,7 +565,6 @@ private extension MOCKComm {
             case .emissionsReq:
                 return "01 01"
             case .runTime:
-                // Seconds since session start
                 _ = sessionElapsed()
                 let seconds = Int(sessionState.accumulatedSeconds.rounded())
                 let raw = max(0, min(65535, seconds))
@@ -591,7 +574,6 @@ private extension MOCKComm {
                 let hexB = String(format: "%02X", B)
                 return "1F" + " " + hexA + " " + hexB
             case .distanceSinceDTCCleared:
-                // Integrate distance; encode in km
                 _ = sessionElapsed()
                 let km = sessionState.accumulatedMeters / 1000.0
                 let raw = max(0, min(65535, Int(km.rounded())))
@@ -601,7 +583,6 @@ private extension MOCKComm {
                 let hexB = String(format: "%02X", B)
                 return "31" + " " + hexA + " " + hexB
             case .distanceWMIL:
-                // Mirror distance since start as well
                 _ = sessionElapsed()
                 let km = sessionState.accumulatedMeters / 1000.0
                 let raw = max(0, min(65535, Int(km.rounded())))
@@ -611,12 +592,10 @@ private extension MOCKComm {
                 let hexB = String(format: "%02X", B)
                 return "21" + " " + hexA + " " + hexB
             case .warmUpsSinceDTCCleared:
-                // Slow increase every ~5 minutes up to 40
                 let cycles = min(40, Int(sessionElapsed() / 300.0))
                 let hexWarmUp = String(format: "%02X", cycles)
                 return "30" + " 00 00 " + hexWarmUp
             case .hybridBatteryLife:
-                // Slow decline from 90% by 0.1% per minute
                 let decline = sessionElapsed() / 600.0
                 let percent = max(50.0, 90.0 - decline)
                 let raw = max(0, min(65535, Int((percent / 100.0) * 65535.0)))
@@ -665,7 +644,6 @@ private extension MOCKComm {
 
     // Handles the raw-text mock path used in the final else-branch of sendCommand
     func makeRawMockResponse(for command: String) -> String? {
-        // Reuse makeMockResponse when possible; otherwise emulate a simple echo format
         if let payload = makeMockResponse(for: command) {
             return payload
         }
@@ -673,8 +651,6 @@ private extension MOCKComm {
     }
 }
 
-//        case .O902: return  "10 14 49 02 01 31 4E 34 \r\n"
-//            + header + "21 41 4C 33 41 50 37 44 \r\n" + header + "22 43 31 39 39 35 38 33 \r\n\r\n>"
 extension String {
     func chunked(by chunkSize: Int) -> Array<String> {
         return stride(from: 0, to: self.count, by: chunkSize).map {
