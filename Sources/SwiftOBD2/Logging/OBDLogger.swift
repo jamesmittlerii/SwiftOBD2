@@ -79,17 +79,17 @@ public class OBDLogger {
         
         switch level {
         case .debug:
-            logger.debug("\(formattedMessage)")
+            logger.debug("\(formattedMessage, privacy: .public)")
         case .info:
-            logger.info("\(formattedMessage)")
+            logger.info("\(formattedMessage, privacy: .public)")
         case .default:
-            logger.notice("\(formattedMessage)")
+            logger.notice("\(formattedMessage, privacy: .public)")
         case .error:
-            logger.error("\(formattedMessage)")
+            logger.error("\(formattedMessage, privacy: .public)")
         case .fault:
-            logger.fault("\(formattedMessage)")
+            logger.fault("\(formattedMessage, privacy: .public)")
         default:
-            logger.log("\(formattedMessage)")
+            logger.log("\(formattedMessage, privacy: .public)")
         }
     }
     
