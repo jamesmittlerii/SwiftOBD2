@@ -123,9 +123,9 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
     // MARK: - Central Manager Control Methods
 
     func startScanning(_ serviceUUIDs: [CBUUID]?) {
-        guard centralManager.state == .poweredOn else { 
+        guard centralManager.state == .poweredOn else {
             obdWarning("Cannot start scanning - Bluetooth not powered on", category: .bluetooth)
-            return 
+            return
         }
         
         obdDebug("Starting BLE scan for services: \(serviceUUIDs?.map { $0.uuidString } ?? ["All"])", category: .bluetooth)
@@ -260,28 +260,13 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
         if let peripheral = peripheral {
             targetPeripheral = peripheral
         } else {
-            // Start scan and guarantee we stop scanning on both success and failure.
             startScanning(BLEPeripheralScanner.supportedServices)
-            do {
-                targetPeripheral = try await peripheralScanner.waitForFirstPeripheral(timeout: timeout)
-                // Stop scanning as soon as we found a device.
-                stopScan()
-            } catch {
-                // Ensure we stop scanning on timeout or any discovery error.
-                stopScan()
-                throw error
-            }
+            targetPeripheral = try await peripheralScanner.waitForFirstPeripheral(timeout: timeout)
         }
 
         connect(to: targetPeripheral)
 
-        do {
-            try await peripheralManager.waitForCharacteristicsSetup(timeout: timeout)
-        } catch {
-            // On setup timeout or failure, cancel the connection to avoid lingering attempts.
-            disconnectPeripheral()
-            throw error
-        }
+        try await peripheralManager.waitForCharacteristicsSetup(timeout: timeout)
     }
 
     func peripheralManager(_ manager: BLEPeripheralManager, didSetupCharacteristics peripheral: CBPeripheral) {
