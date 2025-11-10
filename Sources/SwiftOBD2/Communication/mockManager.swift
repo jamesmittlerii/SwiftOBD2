@@ -471,14 +471,8 @@ private extension MOCKComm {
                 // Clamp and encode
                 demand = max(0.0, min(1.0, demand))
                 
-                // Store for next tick's damping calculation
-                let percent = Int((demand * 100.0).rounded())
-                let A = UInt8(max(0, min(100, percent)))
-                
-                // Update the last value in sessionState for the next tick's damping
-                // Assuming sessionState is available and can store the last value.
-                // sessionState.lastValue = A
-                
+                // Encode on 0…255 scale expected by PID 0111 (.percent decoder)
+                let A = UInt8(clamping: Int((demand * 255.0).rounded()))
                 let hexPos = String(format: "%02X", A)
                 return "11" + " " + hexPos
             case .fuelLevel:
