@@ -46,7 +46,7 @@ public struct CANParser {
 
         frames = try obdLines.compactMap { try Frame(raw: $0, idBits: idBits) }
 
-        let framesByECU = Dictionary(grouping: frames) { $0.txID }
+        let framesByECU = Dictionary(grouping: frames) { $0.canID }
 
         messages = try framesByECU.values.compactMap { try Message(frames: $0) }
     }
@@ -114,6 +114,7 @@ public struct Message: MessageProtocol {
 struct Frame {
     var raw: String
     var data = Data()
+    var canID: String
     var priority: UInt8
     var addrMode: UInt8
     var rxID: UInt8
@@ -125,6 +126,8 @@ struct Frame {
     init(raw: String, idBits: Int) throws {
         self.raw = raw
 
+        canID = String(raw.prefix(idBits == 11 ? 3 : 8))
+        
         let paddedRawData = idBits == 11 ? "00000" + raw : raw
 
         let dataBytes = paddedRawData.hexBytes

@@ -133,26 +133,22 @@ class ELM327 {
         preferredProtocol: PROTOCOL?,
         querySupportedPIDs: Bool = true
     ) async throws -> OBDInfo {
-        //        var obdProtocol: PROTOCOL?
         
         
+        let detectedProtocol = try await detectProtocol(preferredProtocol: preferredProtocol)
+        
+        /* JEM we went back to the original
         let detectedProtocol: PROTOCOL
         if let preferredProtocol {
             detectedProtocol = preferredProtocol
         } else {
             detectedProtocol = try await detectProtocol()
         }
+         */
 
-        //        guard let obdProtocol = detectedProtocol else {
-        //            throw SetupError.noProtocolFound
-        //        }
-
-        //        self.obdProtocol = obdProtocol
         canProtocol = protocols[detectedProtocol]
 
         let vin = await requestVin()
-
-        //        try await setHeader(header: "7E0")
 
         var supportedPIDs: [OBDCommand]? = nil
         var ecuMap: [UInt8: ECUID]? = nil

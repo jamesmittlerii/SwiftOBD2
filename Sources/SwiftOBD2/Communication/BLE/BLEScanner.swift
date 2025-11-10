@@ -43,7 +43,7 @@ class BLEPeripheralScanner: ObservableObject {
         } else {
             foundPeripherals.append(peripheral)
             peripheralSubject.send(peripheral)
-            logger.info("Found new peripheral: \(peripheral.name ?? "Unnamed") - RSSI: \(rssi)")
+            obdInfo("Found new peripheral: \(peripheral.name ?? "Unnamed") - RSSI: \(rssi)", category: .bluetooth)
         }
 
         // Complete waiting continuation if exists

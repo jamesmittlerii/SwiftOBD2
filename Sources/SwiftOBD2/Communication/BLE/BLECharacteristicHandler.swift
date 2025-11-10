@@ -55,11 +55,11 @@ class BLECharacteristicHandler {
                    }
 
                default:
-                   logger.debug("Unknown characteristic: \(characteristic.uuid.uuidString)")
+                   obdDebug("Unknown characteristic: \(characteristic.uuid.uuidString)", category: .bluetooth)
                }
            }
 
-        logger.info("Characteristics setup - Read: \(self.ecuReadCharacteristic != nil), Write: \(self.ecuWriteCharacteristic != nil)")
+        obdDebug("Characteristics setup - Read: \(self.ecuReadCharacteristic != nil), Write: \(self.ecuWriteCharacteristic != nil)", category: .bluetooth)
        }
 
     func discoverCharacteristics(for service: CBService, on peripheral: CBPeripheral) {
@@ -82,13 +82,13 @@ class BLECharacteristicHandler {
         }
 
         peripheral.writeValue(data, for: characteristic, type: .withResponse)
-        logger.info("Sent command: \(command)")
+        //logger.info("Sent command: \(command)")
     }
 
     func handleUpdatedValue(_ data: Data, from characteristic: CBCharacteristic) {
         guard characteristic == ecuReadCharacteristic else {
             if let responseString = String(data: data, encoding: .utf8) {
-                logger.info("Unknown characteristic: \(characteristic)\nResponse: \(responseString)")
+                obdInfo("Unknown characteristic: \(characteristic)\nResponse: \(responseString)", category: .bluetooth)
             }
             return
         }

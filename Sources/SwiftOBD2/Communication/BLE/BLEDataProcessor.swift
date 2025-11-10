@@ -14,7 +14,7 @@ class BLEMessageProcessor {
         guard let string = String(data: buffer, encoding: .utf8) else {
             // Only clear if buffer is getting too large
             if buffer.count > BLEConstants.maxBufferSize {
-                logger.warning("Buffer exceeded max size, clearing")
+                obdWarning("Buffer exceeded max size, clearing", category: .bluetooth)
                 buffer.removeAll()
             }
             return
@@ -36,7 +36,7 @@ class BLEMessageProcessor {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
-        logger.debug("Parsed response: \(lines)")
+        //logger.debug("Parsed response: \(lines)")
         return lines
     }
 
@@ -45,7 +45,7 @@ class BLEMessageProcessor {
        messageCompletion = nil
 
        guard let completion = completion else {
-           logger.warning("Received response with no pending completion")
+           obdWarning("Received response with no pending completion", category: .bluetooth)
            return
        }
 
