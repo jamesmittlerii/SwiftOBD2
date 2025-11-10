@@ -25,6 +25,10 @@ struct MockECUSettings {
 // Per-mock-session evolving state
 private struct MockSessionState {
     var testStart: Date?
+    // Evolving accumulators for realism
+    var accumulatedSeconds: Double = 0
+    var accumulatedMeters: Double = 0
+    var lastTick: Date?
 }
 
 class MOCKComm: CommProtocol {
@@ -150,7 +154,9 @@ class MOCKComm: CommProtocol {
                     return ["OK"]
 
                 case "RV":
-                    return [String(Double.random(in: 12.0 ... 14.0))]
+                    // Simulate alternator voltage with gentle drift
+                    let v = 13.6 + smoothNoise(seed: 1, scale: 0.15)
+                    return [String(format: "%.2f", max(12.2, min(14.6, v)))]
 
                 // ✅ Handle ATSTxx (timeout byte)
                 default:
@@ -181,6 +187,7 @@ class MOCKComm: CommProtocol {
                 response +=  hexString
                 obdDebug("Generated DTC hex: \(hexString)", category: .communication)
             }
+            var header = ""
             if ecuSettings.headerOn {
                 header = "7E8"
             }
@@ -223,6 +230,37 @@ class MOCKComm: CommProtocol {
 // MARK: - Per-session mock generation (moved from OBDCommand extension)
 
 private extension MOCKComm {
+    // Session time helpers
+    func sessionElapsed(now: Date = Date()) -> Double {
+        if sessionState.testStart == nil {
+            sessionState.testStart = now
+        }
+        let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
+        // Update accumulators
+        let dt: Double
+        if let last = sessionState.lastTick {
+            dt = now.timeIntervalSince(last)
+        } else {
+            dt = 0
+        }
+        sessionState.lastTick = now
+        sessionState.accumulatedSeconds += max(0, dt)
+
+        // Integrate distance from speed (km/h → m/s)
+        let vKmh = currentMockSpeed(now: now)
+        let vMs = vKmh / 3.6
+        sessionState.accumulatedMeters += vMs * dt
+        return elapsed
+    }
+
+    // Smooth pseudo-noise tied to elapsed time
+    func smoothNoise(seed: Double, scale: Double) -> Double {
+        let t = sessionElapsed()
+        // Two sine waves with different frequencies blended
+        let n = sin((t + seed) * 0.2) * 0.6 + sin((t * 0.07) + seed * 3.1) * 0.4
+        return n * scale
+    }
+
     // Reusable speed generator using the per-session timeline
     func currentMockSpeed(now: Date = Date()) -> Double {
         if sessionState.testStart == nil {
@@ -314,23 +352,48 @@ private extension MOCKComm {
                 let hexTemp = String(format: "%02X", rawA)
                 return "05" + " " + hexTemp
             case .maf:
-                let maf = Int.random(in: 0...655) * 100
-                let A = maf / 256
-                let B = maf % 256
+                // Approximate MAF (g/s) from RPM and a mild speed factor
+                // Normalize RPM 800..8000 to 0..1
+                let speedValue = currentMockSpeed()
+                let rpm = currentMockRPM(fromSpeed: speedValue)
+                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
+                // Base 2..120 g/s scaled by rpm and load-ish term
+                let base = 2.0 + rpmN * 118.0
+                let withLoad = base * (0.8 + 0.4 * rpmN)
+                let mafGs = max(2.0, min(200.0, withLoad + smoothNoise(seed: 2, scale: 3.0)))
+                // Encode: value = (256*A + B)/100 g/s → raw = Int(mafGs * 100)
+                let raw = Int((mafGs * 100.0).rounded())
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
                 let hexA = String(format: "%02X", A)
                 let hexB = String(format: "%02X", B)
                 return "10" + " " + hexA + " " + hexB
             case .engineLoad:
-                let load = Int.random(in: 0...100)
-                let hexLoad = String(format: "%02X", load)
-                return "04" + " " + hexLoad
+                // More realistic engine load modeled from RPM and throttle-like demand
+                let speedValue = currentMockSpeed()
+                let rpm = currentMockRPM(fromSpeed: speedValue)
+                let rpmClamped = min(8000.0, max(800.0, rpm))
+                let throttleLike = ((rpmClamped - 800.0) / (8000.0 - 800.0)) // 0.0 … 1.0
+                var load = throttleLike
+                if speedValue >= 40 && speedValue <= 80 {
+                    let cruiseFactor = max(0.0, 1.0 - throttleLike * 1.4)
+                    load -= 0.20 * cruiseFactor
+                }
+                if speedValue < 2 && rpmClamped < 1200 {
+                    load = max(load, 0.08 + smoothNoise(seed: 3, scale: 0.02))
+                }
+                load += smoothNoise(seed: 4, scale: 0.03)
+                load = max(0.0, min(1.0, load))
+                let percent = Int((load * 100.0).rounded())
+                let A = UInt8(max(0, min(255, Int((Double(percent) * 255.0 / 100.0).rounded()))))
+                let hexA = String(format: "%02X", A)
+                return "04" + " " + hexA
             case .throttlePos:
-                // Align throttle position with RPM derived from speed/gears via shared helper.
                 let speedValue = currentMockSpeed()
                 let rpmDouble = currentMockRPM(fromSpeed: speedValue)
                 let rpmClamped = min(8000.0, max(800.0, rpmDouble))
-                // Map RPM (800..8000) → throttle (0..100) linearly
-                let throttle = ((rpmClamped - 800.0) / (8000.0 - 800.0)) * 100.0
+                var throttle = ((rpmClamped - 800.0) / (8000.0 - 800.0)) * 100.0
+                throttle += smoothNoise(seed: 5, scale: 3.0)
                 let throttleByte = UInt8(max(0, min(100, Int(throttle.rounded()))))
                 let hexPos = String(format: "%02X", throttleByte)
                 return "11" + " " + hexPos
@@ -343,92 +406,177 @@ private extension MOCKComm {
                 let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
                 let drained = Int(elapsed / 10.0) // 1% per 10s
                 let fuelPercent = max(0, 90 - drained)
-                // OBD-II encoding: A = percent * 255 / 100
                 let byte = UInt8(max(0, min(255, Int((Double(fuelPercent) * 255.0 / 100.0).rounded()))))
                 let hexLevel = String(format: "%02X", byte)
                 return "2F" + " " + hexLevel
             case .fuelPressure:
-                let pressure = Int.random(in: 0...765)
-                let hexPressure = String(format: "%02X", pressure / 3)
-                return "0A" + " " + hexPressure
+                // Gentle drift around 400 kPa (encoded spec: A*3 = kPa)
+                let centerKPa = 400.0 + smoothNoise(seed: 6, scale: 25.0)
+                let kPa = max(200.0, min(600.0, centerKPa))
+                let A = UInt8(max(0, min(255, Int((kPa / 3.0).rounded()))))
+                let hexA = String(format: "%02X", A)
+                return "0A" + " " + hexA
             case .intakeTemp:
-                let temp = Int.random(in: 0...100) + 40
-                let hexTemp = String(format: "%02X", temp)
+                let now = Date()
+                if sessionState.testStart == nil {
+                    sessionState.testStart = now
+                }
+                let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
+                let clamped = max(0.0, min(60.0, elapsed))
+                let tempC = Int((clamped / 60.0) * 70.0) // 0…70
+                let rawA = UInt8(max(0, min(140, tempC + 40)))
+                let hexTemp = String(format: "%02X", rawA)
                 return "0F" + " " + hexTemp
             case .timingAdvance:
-                let advance = Int.random(in: 0...100)
-                let hexAdvance = String(format: "%02X", advance / 2)
-                return "0E" + " " + hexAdvance
+                // Positive at light load and moderate RPM, retards with high load
+                let speedValue = currentMockSpeed()
+                let rpm = currentMockRPM(fromSpeed: speedValue)
+                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
+                // Reuse load logic lightly
+                var load = rpmN
+                if speedValue >= 40 && speedValue <= 80 {
+                    let cruiseFactor = max(0.0, 1.0 - rpmN * 1.4)
+                    load -= 0.20 * cruiseFactor
+                }
+                load = max(0.0, min(1.0, load))
+                // Base advance 10° at light load, drop toward -5° at high load/high rpm
+                var advance = 15.0 * (1.0 - load) - 5.0 * rpmN
+                advance += smoothNoise(seed: 7, scale: 1.0)
+                // Encode: A = (advance*2)+64 (per decoder expectation)
+                let raw = Int((advance * 2.0).rounded()) + 64
+                let A = UInt8(max(0, min(255, raw)))
+                let hexA = String(format: "%02X", A)
+                return "0E" + " " + hexA
             case .intakePressure:
-                let pressure = Int.random(in: 0...255)
-                let hexPressure = String(format: "%02X", pressure)
-                return "0B" + " " + hexPressure
+                // Lower under vacuum (idle/cruise), higher near WOT
+                let speedValue = currentMockSpeed()
+                let rpm = currentMockRPM(fromSpeed: speedValue)
+                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
+                var load = rpmN
+                if speedValue >= 40 && speedValue <= 80 {
+                    let cruiseFactor = max(0.0, 1.0 - rpmN * 1.4)
+                    load -= 0.20 * cruiseFactor
+                }
+                load = max(0.0, min(1.0, load))
+                // Map load to 25..95 kPa with small noise
+                var kPa = 25.0 + load * 70.0 + smoothNoise(seed: 8, scale: 2.0)
+                kPa = max(20.0, min(100.0, kPa))
+                let A = UInt8(max(0, min(255, Int(kPa.rounded()))))
+                let hexA = String(format: "%02X", A)
+                return "0B" + " " + hexA
             case .barometricPressure:
-                let pressure = Int.random(in: 0...255)
-                let hexPressure = String(format: "%02X", pressure)
-                return "33" + " " + hexPressure
+                // Nearly constant (simulate altitude ~101 kPa) with tiny sensor noise
+                var kPa = 101.0 + smoothNoise(seed: 9, scale: 0.6)
+                kPa = max(95.0, min(105.0, kPa))
+                let A = UInt8(max(0, min(255, Int(kPa.rounded()))))
+                let hexA = String(format: "%02X", A)
+                return "33" + " " + hexA
             case .fuelType:
                 return "01 01"
             case .fuelRailPressureDirect:
-                let pressure = Int.random(in: 0...655) * 100
-                let A = pressure / 256
-                let B = pressure % 256
+                // Scale with load and RPM; encode as 10 kPa units via (A*256+B)*10 kPa
+                let speedValue = currentMockSpeed()
+                let rpm = currentMockRPM(fromSpeed: speedValue)
+                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
+                let load = rpmN
+                var kPa = 5000.0 + load * 12000.0 + smoothNoise(seed: 10, scale: 200.0)
+                kPa = max(3000.0, min(20000.0, kPa))
+                let raw = Int((kPa / 10.0).rounded())
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
                 let hexA = String(format: "%02X", A)
                 let hexB = String(format: "%02X", B)
                 return "23" + " " + hexA + " " + hexB
             case .ethanoPercent:
-                let fuel = Int.random(in: 0...100)
-                let hexFuel = String(format: "%02X", fuel)
-                return "52" + " " + hexFuel
+                // Fixed blend (e.g., E10 ~ 10%)
+                let A = UInt8(26) // ~10% of 255
+                let hexA = String(format: "%02X", A)
+                return "52" + " " + hexA
             case .engineOilTemp:
-                let temp = Int.random(in: 0...100) + 40
-                let hexTemp = String(format: "%02X", temp)
-                return "5C" + " " + hexTemp
+                // Rise from ambient 20°C toward 100°C over ~15 minutes with small noise
+                let t = sessionElapsed()
+                let target = 100.0
+                let ambient = 20.0
+                let temp = ambient + (target - ambient) * (1.0 - exp(-t / 900.0)) + smoothNoise(seed: 11, scale: 1.5)
+                let clamped = max(-40.0, min(150.0, temp))
+                let rawA = UInt8(max(0, min(255, Int((clamped + 40.0).rounded()))))
+                let hexA = String(format: "%02X", rawA)
+                return "5C" + " " + hexA
             case .fuelInjectionTiming:
-                let timing = Int.random(in: 0...655) * 100
-                let A = timing / 256
-                let B = timing % 256
+                // Signed degrees BTDC/ATDC; tie to load and RPM
+                let speedValue = currentMockSpeed()
+                let rpm = currentMockRPM(fromSpeed: speedValue)
+                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
+                let load = rpmN
+                var deg = 5.0 + 10.0 * (1.0 - load) - 6.0 * rpmN + smoothNoise(seed: 12, scale: 1.0) // +/- range
+                deg = max(-20.0, min(25.0, deg))
+                // Encode per typical: value = ((A*256)+B)/128 - 210 (depends on decoder; here use uas(0x1B) style 0.01?)
+                // We’ll map to 0.1° resolution: raw = (deg + 210) * 10
+                let raw = Int(((deg + 210.0) * 10.0).rounded())
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
                 let hexA = String(format: "%02X", A)
                 let hexB = String(format: "%02X", B)
                 return "5D" + " " + hexA + " " + hexB
             case .fuelRate:
-                let rate = Int.random(in: 3...120)
-                let A = rate / 256
-                let B = rate % 256
+                // L/h roughly proportional to load and RPM
+                let speedValue = currentMockSpeed()
+                let rpm = currentMockRPM(fromSpeed: speedValue)
+                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
+                let load = rpmN
+                var lph = 1.2 + 18.0 * load + 10.0 * rpmN + smoothNoise(seed: 13, scale: 0.8)
+                lph = max(0.5, min(60.0, lph))
+                // Encode: value = ((A*256)+B)/20 → raw = lph*20
+                let raw = Int((lph * 20.0).rounded())
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
                 let hexA = String(format: "%02X", A)
                 let hexB = String(format: "%02X", B)
                 return "5E" + " " + hexA + " " + hexB
             case .emissionsReq:
                 return "01 01"
             case .runTime:
-                let runtime = Int.random(in: 0...655) * 100
-                let A = runtime / 256
-                let B = runtime % 256
+                // Seconds since session start
+                _ = sessionElapsed()
+                let seconds = Int(sessionState.accumulatedSeconds.rounded())
+                let raw = max(0, min(65535, seconds))
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
                 let hexA = String(format: "%02X", A)
                 let hexB = String(format: "%02X", B)
                 return "1F" + " " + hexA + " " + hexB
             case .distanceSinceDTCCleared:
-                let distance = Int.random(in: 100...6550)
-                let A = distance / 256
-                let B = distance % 256
+                // Integrate distance; encode in km
+                _ = sessionElapsed()
+                let km = sessionState.accumulatedMeters / 1000.0
+                let raw = max(0, min(65535, Int(km.rounded())))
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
                 let hexA = String(format: "%02X", A)
                 let hexB = String(format: "%02X", B)
                 return "31" + " " + hexA + " " + hexB
             case .distanceWMIL:
-                let distance = Int.random(in: 100...6550)
-                let A = distance / 256
-                let B = distance % 256
+                // Mirror distance since start as well
+                _ = sessionElapsed()
+                let km = sessionState.accumulatedMeters / 1000.0
+                let raw = max(0, min(65535, Int(km.rounded())))
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
                 let hexA = String(format: "%02X", A)
                 let hexB = String(format: "%02X", B)
                 return "21" + " " + hexA + " " + hexB
             case .warmUpsSinceDTCCleared:
-                let warmUp = Int.random(in: 0...40)
-                let hexWarmUp = String(format: "%02X", warmUp)
+                // Slow increase every ~5 minutes up to 40
+                let cycles = min(40, Int(sessionElapsed() / 300.0))
+                let hexWarmUp = String(format: "%02X", cycles)
                 return "30" + " 00 00 " + hexWarmUp
             case .hybridBatteryLife:
-                let life = Int.random(in: 100...65500)
-                let A = life / 256
-                let B = life % 256
+                // Slow decline from 90% by 0.1% per minute
+                let decline = sessionElapsed() / 600.0
+                let percent = max(50.0, 90.0 - decline)
+                let raw = max(0, min(65535, Int((percent / 100.0) * 65535.0)))
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
                 let hexA = String(format: "%02X", A)
                 let hexB = String(format: "%02X", B)
                 return "5B" + " " + hexA + " " + hexB
