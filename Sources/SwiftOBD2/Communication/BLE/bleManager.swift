@@ -260,13 +260,28 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
         if let peripheral = peripheral {
             targetPeripheral = peripheral
         } else {
+            // Start scan and guarantee we stop scanning on both success and failure.
             startScanning(BLEPeripheralScanner.supportedServices)
-            targetPeripheral = try await peripheralScanner.waitForFirstPeripheral(timeout: timeout)
+            do {
+                targetPeripheral = try await peripheralScanner.waitForFirstPeripheral(timeout: timeout)
+                // Stop scanning as soon as we found a device.
+                stopScan()
+            } catch {
+                // Ensure we stop scanning on timeout or any discovery error.
+                stopScan()
+                throw error
+            }
         }
 
         connect(to: targetPeripheral)
 
-        try await peripheralManager.waitForCharacteristicsSetup(timeout: timeout)
+        do {
+            try await peripheralManager.waitForCharacteristicsSetup(timeout: timeout)
+        } catch {
+            // On setup timeout or failure, cancel the connection to avoid lingering attempts.
+            disconnectPeripheral()
+            throw error
+        }
     }
 
     func peripheralManager(_ manager: BLEPeripheralManager, didSetupCharacteristics peripheral: CBPeripheral) {
