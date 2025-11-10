@@ -232,10 +232,22 @@ class MOCKComm: CommProtocol {
 private extension MOCKComm {
     // Session time helpers
     func sessionElapsed(now: Date = Date()) -> Double {
+        // Initialize start on first call
         if sessionState.testStart == nil {
             sessionState.testStart = now
+            sessionState.lastTick = now
+            sessionState.accumulatedSeconds = 0
+            sessionState.accumulatedMeters = 0
         }
+
+        // Reset after 2 minutes
+        if let start = sessionState.testStart, now.timeIntervalSince(start) >= 120 {
+            obdInfo("Mock session exceeded 2 minutes. Resetting session state.", category: .communication)
+            sessionState = MockSessionState(testStart: now, accumulatedSeconds: 0, accumulatedMeters: 0, lastTick: now)
+        }
+
         let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
+
         // Update accumulators
         let dt: Double
         if let last = sessionState.lastTick {
