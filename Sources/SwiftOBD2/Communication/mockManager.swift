@@ -225,7 +225,7 @@ extension OBDCommand {
         }
         let elapsed = now.timeIntervalSince(OBDCommand.testStart ?? now)
 
-        let rampDuration: TimeInterval = 5.0
+        let rampDuration: TimeInterval = 15.0
         let minSpeed = 20.0
         let maxSpeed = 70.0
         let midpoint = (minSpeed + maxSpeed) / 2.0 // 45
@@ -236,7 +236,7 @@ extension OBDCommand {
             return max(0.0, min(minSpeed, (elapsed / rampDuration) * minSpeed))
         } else {
             // Sine oscillation around midpoint with 10s period
-            let oscillationPeriod: TimeInterval = 10.0
+            let oscillationPeriod: TimeInterval = 30.0
             let phase = 2.0 * Double.pi * ((elapsed - rampDuration).truncatingRemainder(dividingBy: oscillationPeriod) / oscillationPeriod)
             return midpoint + amplitude * sin(phase)
         }
