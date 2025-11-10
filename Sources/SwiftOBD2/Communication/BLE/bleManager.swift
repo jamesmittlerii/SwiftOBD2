@@ -82,10 +82,15 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
     private var peripheralScanner: BLEPeripheralScanner!
 
     private var cancellables = Set<AnyCancellable>()
+
+    // Timeout task for connection attempts
+    private var connectTimeoutTask: Task<Void, Never>?
     
     deinit {
         // Clean up resources
         cancellables.removeAll()
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
         disconnectPeripheral()
         obdDebug("BLEManager deinitialized", category: .bluetooth)
     }
@@ -178,14 +183,15 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
             startScanning(BLEPeripheralScanner.supportedServices)
             return
         }
-        connect(to: device)
+        // Use default connection timeout when auto-reconnecting
+        connect(to: device, timeout: BLEConstants.connectionTimeout)
     }
 
     func didDiscover(_: CBCentralManager, peripheral: CBPeripheral, advertisementData: [String: Any], rssi: NSNumber) {
         peripheralScanner.addDiscoveredPeripheral(peripheral, advertisementData: advertisementData, rssi: rssi)
     }
 
-    func connect(to peripheral: CBPeripheral) {
+    func connect(to peripheral: CBPeripheral, timeout: TimeInterval) {
         let peripheralName = peripheral.name ?? "Unnamed"
         obdInfo("Attempting connection to peripheral: \(peripheralName)", category: .bluetooth)
         
@@ -197,6 +203,30 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
             self.obdDelegate?.connectionStateChanged(state: .connecting)
         }
         
+        // Cancel any previous timeout task before starting a new one
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = Task { [weak self, weak peripheral] in
+            guard let self = self, let peripheral = peripheral else { return }
+            if timeout > 0 {
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                } catch {
+                    // Task was cancelled (connection completed or failed) – just return
+                    return
+                }
+                // If we get here, the timeout elapsed. Cancel the pending connection.
+                obdWarning("Connection attempt timed out after \(timeout)s. Cancelling connection.", category: .bluetooth)
+                self.centralManager.cancelPeripheralConnection(peripheral)
+
+                let old = self.connectionState
+                self.connectionState = .error
+                OBDLogger.shared.logConnectionChange(from: old, to: self.connectionState)
+                DispatchQueue.main.async {
+                    self.obdDelegate?.connectionStateChanged(state: .error)
+                }
+            }
+        }
+        
         centralManager.connect(peripheral, options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true])
         if centralManager.isScanning {
             centralManager.stopScan()
@@ -204,6 +234,10 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
     }
 
     func didConnect(_: CBCentralManager, peripheral: CBPeripheral) {
+        // Connection succeeded; cancel timeout
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
+
         obdInfo("Connected to peripheral: \(peripheral.name ?? "Unnamed")", category: .bluetooth)
         peripheralManager.setPeripheral(peripheral)
         // connectedPeripheral will mirror via the subscription to peripheralManager.$connectedPeripheral
@@ -211,6 +245,10 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
     }
 
     func didFailToConnect(_: CBCentralManager, peripheral: CBPeripheral, error: Error?) {
+        // Connection failed; cancel timeout
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
+
         let peripheralName = peripheral.name ?? "Unnamed"
         let errorMsg = error?.localizedDescription ?? "Unknown error"
         obdError("Connection failed to peripheral: \(peripheralName) - \(errorMsg)", category: .bluetooth)
@@ -225,6 +263,10 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
     }
 
     func didDisconnect(_: CBCentralManager, peripheral: CBPeripheral, error: Error?) {
+        // Ensure timeout is cleared on any disconnection
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
+
         let peripheralName = peripheral.name ?? "Unnamed"
         if let error = error {
             obdWarning("Unexpected disconnection from \(peripheralName): \(error.localizedDescription)", category: .bluetooth)
@@ -264,7 +306,7 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
             targetPeripheral = try await peripheralScanner.waitForFirstPeripheral(timeout: timeout)
         }
 
-        connect(to: targetPeripheral)
+        connect(to: targetPeripheral, timeout: timeout)
 
         try await peripheralManager.waitForCharacteristicsSetup(timeout: timeout)
     }
@@ -351,6 +393,10 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
     }
 
     private func resetConfigure() {
+        // Clear any pending connection timeout
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
+
         characteristicHandler.reset()
         
         let oldState = connectionState
@@ -448,3 +494,4 @@ enum BLEManagerError: Error, CustomStringConvertible {
         }
     }
 }
+
