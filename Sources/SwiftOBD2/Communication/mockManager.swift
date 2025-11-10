@@ -150,8 +150,6 @@ class MOCKComm: CommProtocol {
                 default:
                     if action.hasPrefix("ST") {
                         let hexByte = String(action.dropFirst(2))   // get the "xx"
-
-                        // Validate it is a 2-digit hex value
                         if let _ = UInt8(hexByte, radix: 16) {
                             //ecuSettings.timeout = hexByte
                             return ["OK"]
@@ -159,7 +157,6 @@ class MOCKComm: CommProtocol {
                             return ["NO DATA"]  // malformed timeout
                         }
                     }
-
                     return ["NO DATA"]
                 }
             }()
@@ -172,10 +169,8 @@ class MOCKComm: CommProtocol {
             // 03 is a request for DTCs
             let dtcs = ["P0104", "U0207"]
             var response = ""
-            // convert to hex
             for dtc in dtcs {
                 var hexString = String(dtc.suffix(4))
-                // 2 by 2
                 hexString = hexString.chunked(by: 2).joined(separator: " ")
                 response +=  hexString
                 obdDebug("Generated DTC hex: \(hexString)", category: .communication)
@@ -220,6 +215,49 @@ class MOCKComm: CommProtocol {
 }
 
 extension OBDCommand {
+    // Persistent state for coolant temperature ramp and speed timeline
+    fileprivate static var testStart: Date?
+
+    // Reusable speed generator using the shared timeline
+    fileprivate static func currentMockSpeed(now: Date = Date()) -> Double {
+        if OBDCommand.testStart == nil {
+            OBDCommand.testStart = now
+        }
+        let elapsed = now.timeIntervalSince(OBDCommand.testStart ?? now)
+
+        let rampDuration: TimeInterval = 5.0
+        let minSpeed = 20.0
+        let maxSpeed = 70.0
+        let midpoint = (minSpeed + maxSpeed) / 2.0 // 45
+        let amplitude = (maxSpeed - minSpeed) / 2.0 // 25
+
+        if elapsed < rampDuration {
+            // Linear ramp 0 → 20
+            return max(0.0, min(minSpeed, (elapsed / rampDuration) * minSpeed))
+        } else {
+            // Sine oscillation around midpoint with 10s period
+            let oscillationPeriod: TimeInterval = 10.0
+            let phase = 2.0 * Double.pi * ((elapsed - rampDuration).truncatingRemainder(dividingBy: oscillationPeriod) / oscillationPeriod)
+            return midpoint + amplitude * sin(phase)
+        }
+    }
+
+    // Reusable RPM generator based on speed and 3-gear model; reaches 8000 at top of each band
+    fileprivate static func currentMockRPM(fromSpeed speedValue: Double) -> Double {
+        if speedValue <= 0.5 {
+            return 800.0 // idle
+        } else if speedValue < 20.0 {
+            // Gear 1: 0→20 hits 8000
+            return 800.0 + 360.0 * speedValue
+        } else if speedValue < 50.0 {
+            // Gear 2: 20→50 hits 8000 (starting around ~1500 at 20)
+            return 1500.0 + (6500.0 / 30.0) * (speedValue - 20.0)
+        } else {
+            // Gear 3: 50→70 hits 8000 (starting around ~1800 at 50)
+            return 1800.0 + 310.0 * (speedValue - 50.0)
+        }
+    }
+
     static func mockResponse(forCommand command: String) -> String? {
 
         guard let obd2Command = self.from(command: command) else {
@@ -243,23 +281,36 @@ extension OBDCommand {
              case .fuelStatus:
                  return "03 02 04"
                 case .rpm:
-                    let desiredRPM = Int.random(in: 1000...3000)
-                    let decimalRep = desiredRPM * 4
+                    let speedValue = OBDCommand.currentMockSpeed()
+                    let rpmDouble = OBDCommand.currentMockRPM(fromSpeed: speedValue)
+                    let rpmClamped = min(8000.0, max(800.0, rpmDouble))
+                    let raw = Int(rpmClamped.rounded()) * 4 // OBD-II encoding for RPM
 
-                    let A = decimalRep / 256
-                    let B = decimalRep % 256
+                    let A = (raw >> 8) & 0xFF
+                    let B = raw & 0xFF
 
                     let hexA = String(format: "%02X", A)
                     let hexB = String(format: "%02X", B)
 
                     return "0C" + " " + hexA + " " + hexB
                 case .speed:
-                    let hexSpeed = String(format: "%02X", Int.random(in: 0...100))
+                    let speedValue = OBDCommand.currentMockSpeed()
+                    let clamped = max(0.0, min(255.0, speedValue))
+                    let hexSpeed = String(format: "%02X", Int(clamped.rounded()))
                     return "0D" + " " + hexSpeed
                 case .coolantTemp:
-                  let temp = Int.random(in: 50...150) + 40
-                 let hexTemp = String(format: "%02X", temp)
-                 return "05" + " " + hexTemp
+                    // Ramp from 0 to 100°C over 60 seconds.
+                    let now = Date()
+                    if OBDCommand.testStart == nil {
+                        OBDCommand.testStart = now
+                    }
+                    let elapsed = now.timeIntervalSince(OBDCommand.testStart ?? now)
+                    let clamped = max(0.0, min(60.0, elapsed))
+                    let tempC = Int((clamped / 60.0) * 100.0) // 0…100
+                    // OBD-II PID 0105 encoding: A = tempC + 40
+                    let rawA = UInt8(max(0, min(140, tempC + 40)))
+                    let hexTemp = String(format: "%02X", rawA)
+                    return "05" + " " + hexTemp
                 case .maf:
                     let maf = Int.random(in: 0...655) * 100
                     let A = maf / 256
@@ -274,12 +325,27 @@ extension OBDCommand {
                     let hexLoad = String(format: "%02X", load)
                     return "04" + " " + hexLoad
                 case .throttlePos:
-                    let pos = Int.random(in: 0...100)
-                    let hexPos = String(format: "%02X", pos)
+                    // Align throttle position with RPM derived from speed/gears via shared helper.
+                    let speedValue = OBDCommand.currentMockSpeed()
+                    let rpmDouble = OBDCommand.currentMockRPM(fromSpeed: speedValue)
+                    let rpmClamped = min(8000.0, max(800.0, rpmDouble))
+                    // Map RPM (800..8000) → throttle (0..100) linearly
+                    let throttle = ((rpmClamped - 800.0) / (8000.0 - 800.0)) * 100.0
+                    let throttleByte = UInt8(max(0, min(100, Int(throttle.rounded()))))
+                    let hexPos = String(format: "%02X", throttleByte)
                     return "11" + " " + hexPos
                 case .fuelLevel:
-                    let level = Int.random(in: 0...100)
-                    let hexLevel = String(format: "%02X", Double(level) * 2.55)
+                    // Start at 90% and decrease over time (1% every 10 seconds) until 0%.
+                    let now = Date()
+                    if OBDCommand.testStart == nil {
+                        OBDCommand.testStart = now
+                    }
+                    let elapsed = now.timeIntervalSince(OBDCommand.testStart ?? now)
+                    let drained = Int(elapsed / 10.0) // 1% per 10s
+                    let fuelPercent = max(0, 90 - drained)
+                    // OBD-II encoding: A = percent * 255 / 100
+                    let byte = UInt8(max(0, min(255, Int((Double(fuelPercent) * 255.0 / 100.0).rounded()))))
+                    let hexLevel = String(format: "%02X", byte)
                     return "2F" + " " + hexLevel
                 case .fuelPressure:
                     let pressure = Int.random(in: 0...765)
@@ -399,7 +465,6 @@ extension OBDCommand {
         case .mode9(let command):
             switch command {
             case .PIDS_9A:
-                  //  return "00 55 40 00 00 00"
                    return "00 55 40 57 F0"
             case .VIN:
                 return "02 01 31 4E 34 41 4C 33 41 50 37 44 43 31 39 39 35 38 33"
