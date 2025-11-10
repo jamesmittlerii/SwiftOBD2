@@ -389,13 +389,58 @@ private extension MOCKComm {
                 let hexA = String(format: "%02X", A)
                 return "04" + " " + hexA
             case .throttlePos:
-                let speedValue = currentMockSpeed()
-                let rpmDouble = currentMockRPM(fromSpeed: speedValue)
-                let rpmClamped = min(8000.0, max(800.0, rpmDouble))
-                var throttle = ((rpmClamped - 800.0) / (8000.0 - 800.0)) * 100.0
-                throttle += smoothNoise(seed: 5, scale: 3.0)
-                let throttleByte = UInt8(max(0, min(100, Int(throttle.rounded()))))
-                let hexPos = String(format: "%02X", throttleByte)
+                // Model driver demand with smooth baseline + transients for accel/decel,
+                // and constraints for idle/cruise/WOT.
+                let now = Date()
+                let speed = currentMockSpeed(now: now)
+                let rpm = currentMockRPM(fromSpeed: speed)
+
+                // Normalized RPM 0..1
+                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
+
+                // Baseline driver demand: slow oscillation between 10% and ~55%
+                var demand = 0.32
+                demand += 0.18 * sin(sessionElapsed() * 0.12) // very slow wave
+                demand += 0.10 * sin(sessionElapsed() * 0.45 + 1.3) // mid wave
+
+                // Accel tip-in: if speed is increasing (approx via derivative using lastTick),
+                // bias demand up briefly; if decreasing, bias down a bit.
+                var accelBias = 0.0
+                if let last = sessionState.lastTick {
+                    let dt = max(0.001, now.timeIntervalSince(last))
+                    let prevSpeed = currentMockSpeed(now: last)
+                    let dv = speed - prevSpeed // km/h
+                    let accel = dv / dt // km/h per second
+                    accelBias = max(-0.10, min(0.20, accel * 0.01)) // cap bias
+                }
+                demand += accelBias
+
+                // Idle minimum opening (throttle body not fully closed)
+                if rpm < 1100 && speed < 3 {
+                    demand = max(demand, 0.08 + 0.02 * sin(sessionElapsed() * 1.2))
+                }
+
+                // At cruising speeds 40–80 km/h, keep moderate throttle unless RPM is high
+                if speed >= 40 && speed <= 80 {
+                    let cruiseTarget = 0.22 + 0.10 * rpmN // 22–32%
+                    demand = 0.7 * demand + 0.3 * cruiseTarget
+                }
+
+                // Approach WOT at high RPM under acceleration
+                if rpmN > 0.8 {
+                    demand = max(demand, 0.65 + 0.25 * (rpmN - 0.8) / 0.2) // up to ~90%
+                }
+
+                // Small sensor noise
+                demand += smoothNoise(seed: 5.5, scale: 0.02)
+
+                // Clamp 0..1 and convert to percent 0..100
+                demand = max(0.0, min(1.0, demand))
+                let percent = Int((demand * 100.0).rounded())
+
+                // Encode PID 0111: A = percent
+                let A = UInt8(max(0, min(100, percent)))
+                let hexPos = String(format: "%02X", A)
                 return "11" + " " + hexPos
             case .fuelLevel:
                 // Start at 90% and decrease over time (1% every 10 seconds) until 0%.
@@ -561,7 +606,7 @@ private extension MOCKComm {
                 let km = sessionState.accumulatedMeters / 1000.0
                 let raw = max(0, min(65535, Int(km.rounded())))
                 let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
+                let B = 0xFF & raw
                 let hexA = String(format: "%02X", A)
                 let hexB = String(format: "%02X", B)
                 return "21" + " " + hexA + " " + hexB
