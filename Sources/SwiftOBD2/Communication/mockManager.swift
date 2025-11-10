@@ -385,19 +385,15 @@ private extension MOCKComm {
                 let hexA = String(format: "%02X", A)
                 return "04" + " " + hexA
             case .throttlePos:
-                // Improved: allow WOT (>70%) at high RPM or strong acceleration,
-                // reduce cruise damping in those cases, keep idle min and small noise.
+                // --- 1. Current State & Normalization ---
                 let now = Date()
                 let speed = currentMockSpeed(now: now)
                 let rpm = currentMockRPM(fromSpeed: speed)
 
-                // Normalized RPM 0..1
-                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
-
-                // Baseline driver demand: slow waves around ~30%
-                var demand = 0.30
-                demand += 0.16 * sin(sessionElapsed() * 0.10)
-                demand += 0.08 * sin(sessionElapsed() * 0.42 + 0.9)
+                // Normalized RPM (0=idle_min..1=redline)
+                let idleRpm: Double = 800.0
+                let redlineRpm: Double = 8000.0
+                let rpmN = max(0.0, min(1.0, (rpm - idleRpm) / (redlineRpm - idleRpm)))
 
                 // Approximate longitudinal acceleration (km/h per second)
                 var accel: Double = 0
@@ -407,40 +403,82 @@ private extension MOCKComm {
                     accel = (speed - prevSpeed) / dt
                 }
 
-                // Bias for accel/decel
-                let accelBias = max(-0.12, min(0.25, accel * 0.012))
-                demand += accelBias
+                // --- 2. Baseline Driver Demand ---
+                // Start with an RPM-based target, simulating a desired power output.
+                // Base demand: low at idle/low RPM, higher at high RPM.
+                var demand = 0.15 + 0.45 * pow(rpmN, 2.0) // Non-linear response to RPM
 
-                // Idle minimum opening
-                if rpm < 1100 && speed < 3 {
-                    demand = max(demand, 0.08 + 0.02 * sin(sessionElapsed() * 1.2))
+                // Add slow waves for general driving fluctuations (cruising)
+                demand += 0.10 * sin(sessionElapsed() * 0.15)
+                demand += 0.05 * sin(sessionElapsed() * 0.50 + 1.2)
+
+                // --- 3. Acceleration/Deceleration Response (Aggressive Driver Input) ---
+                let aggressiveAccelThreshold: Double = 5.0 // Strong acceleration
+                let aggressiveDecelThreshold: Double = -4.0 // Strong deceleration/braking
+
+                // Positive Acceleration Bias: Higher increase for positive accel
+                let positiveAccelBias = max(0.0, min(0.35, accel * 0.025))
+                demand += positiveAccelBias
+
+                // Negative Acceleration (Decel/Braking) Response: Reduce throttle sharply
+                let negativeAccelBias = max(-0.50, min(0.0, accel * 0.05))
+                demand += negativeAccelBias
+
+                // --- 4. Idle Minimum & Coasting Fuel Cut-Off (CFCO) Simulation ---
+                // Enforce minimum at idle
+                let isIdle = (rpm < 1100 && speed < 3)
+                if isIdle {
+                    // Idle is a small, stable opening with a tiny oscillation
+                    demand = max(demand, 0.06 + 0.01 * sin(sessionElapsed() * 1.5))
                 }
 
-                // Detect high-load intent: high RPM or strong positive accel
-                let highLoad = (rpmN > 0.80) || (accel > 6.0) // ~+6 km/h per second
-
-                // Cruise damping (only when not in high load)
-                if speed >= 40 && speed <= 80 && !highLoad {
-                    let cruiseTarget = 0.22 + 0.10 * rpmN
-                    demand = 0.65 * demand + 0.35 * cruiseTarget
+                // Simulate throttle cut-off during strong engine braking/coasting
+                let isCoasting = (rpm > 1200 && accel < aggressiveDecelThreshold)
+                if isCoasting && !isIdle {
+                    // Drop throttle aggressively, but keep a small mechanical minimum (e.g., 2-5%)
+                    demand = min(demand, 0.02 + 0.03 * rpmN) // Small floor that rises slightly with RPM
                 }
 
-                // Enforce WOT tendency under high load
-                if highLoad {
-                    // Raise floor toward 70% and allow up to ~95% with RPM
-                    let wotFloor = 0.70
-                    let wotTop = 0.95
-                    let scaled = wotFloor + (wotTop - wotFloor) * min(1.0, (rpmN - 0.8) / 0.2)
-                    demand = max(demand, scaled)
+
+                // --- 5. Wide Open Throttle (WOT) High-Load Logic ---
+                // High load detected if very high RPM OR aggressive acceleration
+                let isHighLoad = (rpmN > 0.85) || (accel > aggressiveAccelThreshold)
+
+                if isHighLoad {
+                    // Aggressively target high demand (75% to 99%)
+                    let wotFloor = 0.75
+                    let wotCeiling = 0.99
+                    
+                    // Scale the target based on how deep into the high RPM zone we are
+                    let scaledRpmTarget = wotFloor + (wotCeiling - wotFloor) * min(1.0, (rpmN - 0.8) / 0.2)
+                    
+                    // Ensure demand is at least this high
+                    demand = max(demand, scaledRpmTarget)
                 }
 
-                // Small sensor noise
-                demand += smoothNoise(seed: 5.5, scale: 0.02)
+                // --- 6. Smooth Transition/Damping (Cruising) ---
+                // Use a slight low-pass filter to smooth the demand over time, mimicking a physical butterfly valve and ECU lag.
+                let cruiseSpeedRange = (40.0...100.0) // Higher speeds than before
+                let cruiseDampingFactor: Double = 0.35 // 35% of old value, 65% of new demand (more responsive)
+
+               
+
+
+                // --- 7. Final Clean-up (Noise and Clamp) ---
+                // Small sensor/actuator noise
+                demand += smoothNoise(seed: 5.5, scale: 0.015) // Slightly less noise
 
                 // Clamp and encode
                 demand = max(0.0, min(1.0, demand))
+                
+                // Store for next tick's damping calculation
                 let percent = Int((demand * 100.0).rounded())
                 let A = UInt8(max(0, min(100, percent)))
+                
+                // Update the last value in sessionState for the next tick's damping
+                // Assuming sessionState is available and can store the last value.
+                // sessionState.lastValue = A
+                
                 let hexPos = String(format: "%02X", A)
                 return "11" + " " + hexPos
             case .fuelLevel:
