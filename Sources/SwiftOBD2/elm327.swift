@@ -394,7 +394,7 @@ class ELM327 {
     {
         
         let response = try await comm.sendCommand(message, retries: retries)
-           obdDebug("→ Sent: \(message)\n← Response: \(response.joined(separator: " | "))")
+        obdDebug("→ Sent: \(message)\n← Response: \(response.joined(separator: " | "))", category: .communication)
            return response
         
         
