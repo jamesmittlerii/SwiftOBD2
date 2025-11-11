@@ -316,6 +316,8 @@ public enum Decoders: Equatable, Encodable {
     case dtc
     case fuelRate
     case monitor
+    case GMACPressure
+    case GMoilPressure
     case count
     case cvn
     case encoded_string
@@ -373,6 +375,10 @@ public enum Decoders: Equatable, Encodable {
             return DTCDecoder()
         case .fuelRate:
             return FuelRateDecoder()
+        case .GMACPressure:
+            return GMACPressureDecoder()
+        case .GMoilPressure:
+            return GMEngineOilPressureDecoder()
         case .monitor:
             return MonitorDecoder()
         case .encoded_string:
@@ -583,6 +589,67 @@ struct AbsoluteLoadDecoder: Decoder {
         )
     }
 }
+
+struct GMEngineOilPressureDecoder: Decoder {
+    func decode(data: Data, unit: MeasurementUnit) -> Result<
+        DecodeResult, DecodeError
+    > {
+        // Expect at least one data byte
+        guard let aByte = data.first else {
+            return .failure(.invalidData)
+        }
+
+        // Convert to integer
+        let a = Int(aByte)
+
+        // GM scaling formula:
+        // P(psi) = A * 0.578
+        // Convert psi → kPa
+        let pressureKPa = (Double(a) * 0.578) * 6.8947
+
+        // Clamp to non-negative range
+        let clamped = max(0.0, pressureKPa)
+
+        return .success(
+            .measurementResult(
+                MeasurementResult(value: clamped,
+                                  unit: UnitPressure.kilopascals)
+            )
+        )
+    }
+}
+
+
+struct GMACPressureDecoder: Decoder {
+    func decode(data: Data, unit: MeasurementUnit) -> Result<
+        DecodeResult, DecodeError
+    > {
+        // Expect at least 1 data byte
+        guard let aByte = data.first else {
+            return .failure(.invalidData)
+        }
+
+        // Convert to integer
+        let a = Int(aByte)
+
+        // Apply GM community scaling:
+        // P(psig) = (A * 1.83) - 14.7
+        // Convert psi → kPa by multiplying by 6.8947
+        let pressureKPa = ((Double(a) * 1.83) - 14.7) * 6.8947
+
+        // Guard against unrealistic negatives
+        let clamped = max(0.0, pressureKPa)
+
+        return .success(
+            .measurementResult(
+                MeasurementResult(value: clamped,
+                                  unit: UnitPressure.kilopascals)
+            )
+        )
+    }
+}
+
+
 
 struct EvapPressureDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<

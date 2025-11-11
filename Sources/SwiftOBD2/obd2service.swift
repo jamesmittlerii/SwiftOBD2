@@ -58,7 +58,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     private var wifiPort: UInt16?
 
     /// The internal ELM327 object responsible for direct adapter interaction.
-    private var elm327: ELM327
+    var elm327: ELM327
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -336,12 +336,19 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         return results
     }
     
+    public func sendCommand(_ command: String) async throws -> [String] {
+        return try await elm327.sendCommand(command)
+    }
+    
     /// Sends an OBD2 command to the vehicle and returns the raw response.
     /// - Parameter command: The OBD2 command to send.
     /// - Returns: measurement result
     /// - Throws: Errors that might occur during the request process.
     public func requestPID(_ command: OBDCommand, unit: MeasurementUnit) async throws -> [OBDCommand: DecodeResult] {
-        let response = try await sendCommandInternal("01" + command.properties.command.dropFirst(2), retries: 1)
+        
+        
+        let response = try await sendCommandInternal(command.properties.command, retries: 1)
+        // JEM let response = try await sendCommandInternal("01" + command.properties.command.dropFirst(2), retries: 1)
 
         guard let responseData = try elm327.canProtocol?.parse(response).first?.data else { return [:] }
 
@@ -361,13 +368,14 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         let requestedPid = UInt8(pidHex, radix: 16) ?? 0x00
         let firstPayloadByte = responseData.first ?? 0x00
 
+        /* JEM
         if firstPayloadByte != requestedPid {
             obdWarning(
                 "PID echo mismatch. Expected PID 0x\(String(format: "%02X", requestedPid)), got 0x\(String(format: "%02X", firstPayloadByte))",
                 category: .parsing
             )
             throw OBDServiceError.pidMismatch(expected: requestedPid, actual: firstPayloadByte)
-        }
+        } */
 
         var batchedResponse = BatchedResponse(response: responseData, unit)
 

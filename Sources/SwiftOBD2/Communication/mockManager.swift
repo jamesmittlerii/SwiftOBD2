@@ -46,20 +46,31 @@ class MOCKComm: CommProtocol {
         var header = ""
 
         let prefix = String(command.prefix(2))
-        if prefix == "01" || prefix == "06" || prefix == "09" {
+        if prefix == "01" || prefix == "06" || prefix == "09" || prefix == "22"{
             var response: String = ""
             if ecuSettings.headerOn {
                 header = "7E8"
             }
-            for i in stride(from: 2, to: command.count, by: 2) {
-                let index = command.index(command.startIndex, offsetBy: i)
-                let nextIndex = command.index(command.startIndex, offsetBy: i + 2)
-                let subCommand = prefix + String(command[index..<nextIndex])
-                guard let value = makeMockResponse(for: subCommand) else {
+            
+            if prefix == "22" {
+                guard let value = makeMockResponse(for: command) else {
                     return ["No Data"]
-
+                    
                 }
                 response.append(value + " ")
+                
+            }
+            else {
+                for i in stride(from: 2, to: command.count, by: 2) {
+                    let index = command.index(command.startIndex, offsetBy: i)
+                    let nextIndex = command.index(command.startIndex, offsetBy: i + 2)
+                    let subCommand = prefix + String(command[index..<nextIndex])
+                    guard let value = makeMockResponse(for: subCommand) else {
+                        return ["No Data"]
+                        
+                    }
+                    response.append(value + " ")
+                }
             }
             guard var mode = Int(command.prefix(2)) else {
                 return [""]
@@ -321,6 +332,17 @@ private extension MOCKComm {
         }
 
         switch obd2Command {
+        case .GMmode22(let command):
+            switch command {
+            case .ACHighPressure:
+                return "04 62 11 44 32"
+            case .engineOilPressure:
+                return "04 62 14 70 31"
+            case .transFluidTemp:
+                return "04 62 19 40 49"
+            case .engineOilTemp:
+                return "04 62 11 54 64"
+            }
         case .mode1(let command):
             switch command {
             case .pidsA:
@@ -333,6 +355,8 @@ private extension MOCKComm {
                 return "40 FA DC 80 00 00"
             case .controlModuleVoltage:
                 return "42 35 04"
+            case .ambientAirTemp:
+                return "46 32"
             case .fuelStatus:
                 return "03 02 04"
             case .rpm:

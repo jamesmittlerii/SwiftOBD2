@@ -86,6 +86,7 @@ public enum OBDCommand: Codable, Hashable, Comparable, Identifiable {
     case mode3(Mode3)
     case mode6(Mode6)
     case mode9(Mode9)
+    case GMmode22(GMMode22)
     case protocols(Protocols)
 	
 	public var id: Self { return self }
@@ -101,6 +102,8 @@ public enum OBDCommand: Codable, Hashable, Comparable, Identifiable {
         case let .mode6(command):
             return command.properties
         case let .mode3(command):
+            return command.properties
+        case let .GMmode22(command):
             return command.properties
         case let .protocols(command):
             return command.properties
@@ -118,6 +121,13 @@ public enum OBDCommand: Codable, Hashable, Comparable, Identifiable {
         case ATAT1
         case ATSTFF
         case ATDPN
+    }
+    
+    public enum GMMode22  : CaseIterable, Codable, Comparable {
+        case engineOilTemp
+        case engineOilPressure
+        case transFluidTemp
+        case ACHighPressure
     }
 
     public enum Protocols: CaseIterable, Codable, Comparable {
@@ -404,6 +414,9 @@ public enum OBDCommand: Codable, Hashable, Comparable, Identifiable {
         for command in OBDCommand.Mode9.allCases {
             commands.append(.mode9(command))
         }
+        for command in OBDCommand.GMMode22.allCases {
+            commands.append(.GMmode22(command))
+        }
         for command in OBDCommand.Protocols.allCases {
             commands.append(.protocols(command))
         }
@@ -424,6 +437,18 @@ extension OBDCommand.General {
         case .ATAT1: return CommandProperties("ATAT1", "Adaptive Timing On", 5, .none)
         case .ATSTFF: return CommandProperties("ATSTFF", "Set Time to Fast", 5, .none)
         case .ATDPN: return CommandProperties("ATDPN", "Describe Protocol Number", 5, .none)
+        }
+    }
+}
+
+extension OBDCommand.GMMode22
+{
+    public var properties: CommandProperties {
+        switch self {
+        case .engineOilTemp: return CommandProperties("221154", "Engine Oil Temp", 2, .temp, true, maxValue: 215, minValue: -40)
+        case .transFluidTemp: return CommandProperties("221940", "Transmission Fluid Temp", 2, .temp, true, maxValue: 215, minValue: -40)
+        case .engineOilPressure: return CommandProperties("221470", "Engine Oil Pressure", 2, .pressure, true)
+        case .ACHighPressure: return CommandProperties("221144", "Air Conditioner High Pressure", 2, .pressure, true)
         }
     }
 }
@@ -501,7 +526,7 @@ extension OBDCommand.Mode1 {
         case .absoluteLoad: return CommandProperties("0143", "Absolute load value", 4, .percent, true)
         case .commandedEquivRatio: return CommandProperties("0144", "Commanded equivalence ratio", 3, .uas(0x1E), true)
         case .relativeThrottlePos: return CommandProperties("0145", "Relative throttle position", 4, .percent, true)
-        case .ambientAirTemp: return CommandProperties("0146", "Ambient air temperature", 4, .temp, true)
+        case .ambientAirTemp: return CommandProperties("0146", "Ambient air temperature", 2, .temp, true)
         case .throttlePosB: return CommandProperties("0147", "Absolute throttle position B", 4, .percent, true)
         case .throttlePosC: return CommandProperties("0148", "Absolute throttle position C", 4, .percent, true)
         case .throttlePosD: return CommandProperties("0149", "Absolute throttle position D", 4, .percent, true)

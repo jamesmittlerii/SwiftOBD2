@@ -321,7 +321,7 @@ class ELM327 {
             //_ = try await sendCommand("ATSH7E0")
 
             // Set CAN Receive Address filter to 0x7E8 (Engine ECU response address)
-           _ = try await sendCommand("ATCRA7E8")
+             _ = try await sendCommand("ATCRA7E8")
 
             // Turn off spaces in responses (S0 = "Spacing Off")
             // Makes parsing cleaner and reduces payload size
