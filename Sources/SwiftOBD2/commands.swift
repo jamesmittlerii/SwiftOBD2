@@ -447,8 +447,8 @@ extension OBDCommand.GMMode22
         switch self {
         case .engineOilTemp: return CommandProperties("221154", "Engine Oil Temp", 3, .temp, true, maxValue: 215, minValue: -40)
         case .transFluidTemp: return CommandProperties("221940", "Transmission Fluid Temp", 3, .temp, true, maxValue: 215, minValue: -40)
-        case .engineOilPressure: return CommandProperties("221470", "Engine Oil Pressure", 3, .pressure, true)
-        case .ACHighPressure: return CommandProperties("221144", "Air Conditioner High Pressure", 3, .pressure, true)
+        case .engineOilPressure: return CommandProperties("221470", "Engine Oil Pressure", 3, .GMoilPressure, true)
+        case .ACHighPressure: return CommandProperties("221144", "Air Conditioner High Pressure", 3, .GMACPressure, true)
         }
     }
 }
