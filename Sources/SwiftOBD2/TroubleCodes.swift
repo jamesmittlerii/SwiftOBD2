@@ -23,6 +23,21 @@ public struct TroubleCodeMetadata: Codable, Hashable {
     public let severity: CodeSeverity
     public let causes: [String]
     public let remedies: [String]
+    
+    // Expose a public memberwise initializer so app targets can construct samples/previews.
+    public init(code: String,
+                title: String,
+                description: String,
+                severity: CodeSeverity,
+                causes: [String],
+                remedies: [String]) {
+        self.code = code
+        self.title = title
+        self.description = description
+        self.severity = severity
+        self.causes = causes
+        self.remedies = remedies
+    }
 }
 
 // Internal structure for decoding the indexed JSON
