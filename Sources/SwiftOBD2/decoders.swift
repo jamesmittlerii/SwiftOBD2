@@ -1160,13 +1160,26 @@ let compressionTests = [
 ]
 
 let FUEL_STATUS: [String: String] = [
-    "0": "Unavailable",
-    "1": "Open loop: low engine temp",
-    "2": "Closed loop: O₂ sensor working",
-    "3": "Open loop: load or decel fuel cut",
-    "4": "Open loop: system fault",
-    "5": "Closed loop: system fault"
+    "1": "Open Loop (cold engine)",
+    "2": "Closed Loop (normal operation)",
+    "3": "Open Loop (load/fuel cut)",
+    "4": "Open loop: system fault detected",
+    "5": "Closed loop: O₂ fault in feedback"
     
+    /*
+     case .openLoopCold:
+         return "Open Loop (cold engine)"
+     case .closedLoop:
+         return "Closed Loop (normal operation)"
+     case .openLoopLoad:
+         return "Open Loop (load/fuel cut)"
+     case .openLoopFailure:
+         return "Open Loop (system failure)"
+     case .closedLoopAlt:
+         return "Closed Loop (alternate feedback)"
+     case .unknown:
+         return "Unknown"
+     */
     /*
     "1": "Open loop due to insufficient engine temperature",
     "2": "Closed loop, using oxygen sensor feedback to determine fuel mix",
