@@ -1160,6 +1160,7 @@ let compressionTests = [
 ]
 
 let FUEL_STATUS: [String: String] = [
+    "0": "Unavailable",
     "1": "Open Loop (cold engine)",
     "2": "Closed Loop (normal operation)",
     "3": "Open Loop (load/fuel cut)",
