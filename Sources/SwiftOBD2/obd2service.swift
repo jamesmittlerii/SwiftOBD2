@@ -397,6 +397,8 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             guard let responseData = try elm327.canProtocol?.parse(response).first?.data else {
                 return .failure(.noData)
             }
+            
+            let pidsize = command.properties.command.count/2 - 1
             return command.properties.decode(data: responseData.dropFirst())
         } catch {
             throw OBDServiceError.commandFailed(command: command.properties.command, error: error)

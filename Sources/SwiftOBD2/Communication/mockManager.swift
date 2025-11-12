@@ -335,13 +335,13 @@ private extension MOCKComm {
         case .GMmode22(let command):
             switch command {
             case .ACHighPressure:
-                return "04 62 11 44 32"
+                return "11 44 32 00"
             case .engineOilPressure:
-                return "04 62 14 70 31"
+                return "14 70 31 00"
             case .transFluidTemp:
-                return "04 62 19 40 49"
+                return "19 40 49 00"
             case .engineOilTemp:
-                return "04 62 11 54 64"
+                return "11 54 64 00"
             }
         case .mode1(let command):
             switch command {

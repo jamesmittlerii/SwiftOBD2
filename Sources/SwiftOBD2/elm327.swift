@@ -423,7 +423,7 @@ class ELM327 {
         else {
             return .failure(.noData)
         }
-        return statusCommand.properties.decode(data: statusData)
+        return statusCommand.properties.decode(data: statusData.dropFirst())
     }
 
     func scanForTroubleCodes() async throws -> [ECUID: [TroubleCodeMetadata]] {
@@ -439,7 +439,7 @@ class ELM327 {
             guard let dtcData = message.data else {
                 continue
             }
-            let decodedResult = dtcCommand.properties.decode(data: dtcData)
+            let decodedResult = dtcCommand.properties.decode(data: dtcData.dropFirst())
 
             let ecuId = message.ecu
             switch decodedResult {
@@ -643,8 +643,11 @@ struct BatchedResponse {
         let valueData = response.prefix(size)
 
         response.removeFirst(size)
+        
+        // pid size
+        let pidsize = properties.command.count / 2 - 1
         //print("Buffer: \(valueData.compactMap { String(format: "%02X ", $0) }.joined())")
-        let result = cmd.properties.decode(data: valueData, unit: unit)
+        let result = cmd.properties.decode(data: valueData.dropFirst(pidsize), unit: unit)
 
         switch result {
         case .success(let decodeResult):
