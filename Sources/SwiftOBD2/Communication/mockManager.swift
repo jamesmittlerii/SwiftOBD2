@@ -346,7 +346,7 @@ private extension MOCKComm {
         case .mode1(let command):
             switch command {
             case .pidsA:
-                return "00 BE 3F A8 13 00"
+                return "00 FF FF FF FF 00"
             case .status:
                 return "01 00 07 E5 00"
             case .freezeDTC:
@@ -561,7 +561,7 @@ private extension MOCKComm {
                 let B = raw & 0xFF
                 return "1F " + String(format: "%02X %02X", A, B)
             case .pidsB:
-                return "20 90 07 E0 11 00"
+                return "20 FF FF FF FF 00"
             case .distanceWMIL:
                 _ = sessionElapsed()
                 let km = sessionState.accumulatedMeters / 1000.0
@@ -674,7 +674,7 @@ private extension MOCKComm {
                               pidByte(for: command),
                               A, B)
             case .pidsC:
-                return "40 FA DC 80 00 00"
+                return "40 FF FF FF FE 00"
             case .statusDriveCycle:
                 // Similar to 0101 but for this drive cycle
                 return "41 00 07 E5 00"
