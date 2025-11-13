@@ -447,7 +447,7 @@ struct MaxMafDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         guard bytes.count > 0 else { return .failure(.invalidData) }
-        let value = bytes[0] * 10
+        let value = Double(bytes[0]) * 10.0
         return .success(.measurementResult(MeasurementResult(value: Double(value), unit: Unit.gramsPerSecond)))
     }
 }
