@@ -740,7 +740,7 @@ private extension MOCKComm {
                 let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.25 + 0.5 * sin(sessionElapsed() * 0.22))) * 255.0).rounded()))
                 return "4C " + String(format: "%02X 00", pct)
             case .runTimeMIL:
-                // Time with MIL on; simulate as 0 in mock
+                
                 return "4D 00 00"
             case .timeSinceDTCCleared:
                 let seconds = Int(sessionElapsed().rounded())

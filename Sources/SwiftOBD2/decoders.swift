@@ -403,10 +403,21 @@ struct DTCDecoder: Decoder {
 struct InjectTimingDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let local = Data(data)
-        let value = (Double(bytesToInt(local)) - 26880) / 128
-        return .success(.measurementResult(MeasurementResult(value: value, unit: UnitPressure.degrees)))
+        guard local.count >= 2 else {
+            return .failure(.invalidData)
+        }
+
+        let raw = bytesToInt(local)
+        let value = (Double(raw) - 21000.0) / 10.0
+
+        return .success(
+            .measurementResult(
+                MeasurementResult(value: value, unit: UnitAngle.degrees)
+            )
+        )
     }
 }
+
 
 struct EvapPressureAltDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
