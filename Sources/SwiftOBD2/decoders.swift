@@ -159,11 +159,13 @@ class UAS {
                 self.unit = UnitPressure.poundsForcePerSquareInch
                 return value * 0.145038  // Convert kPa to psi
             case .gramsPerSecond:
-                return value * 0.132277  // Convert grams/sec to pounds/min
                 self.unit = .poundsPerMinute
+                return value * 0.132277  // Convert grams/sec to pounds/min
+                
             case .litersPerHour:
-                return value * 0.264172  // Convert liters per hour to gallons
                 self.unit = .gallonsPerHour
+                return value * 0.264172  // Convert liters per hour to gallons
+                
             case .bar:
                 self.unit = UnitPressure.poundsForcePerSquareInch
                 return value * 14.5038  // Convert bar to psi
