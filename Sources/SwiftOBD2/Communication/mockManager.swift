@@ -349,196 +349,84 @@ private extension MOCKComm {
                 return "00 BE 3F A8 13 00"
             case .status:
                 return "01 00 07 E5 00"
-            case .pidsB:
-                return "20 90 07 E0 11 00"
-            case .pidsC:
-                return "40 FA DC 80 00 00"
-            case .controlModuleVoltage:
-                return "42 35 04"
-            case .ambientAirTemp:
-                return "46 32"
+            case .freezeDTC:
+                // Return a single stored code (e.g., P0301 => 03 01)
+                return "02 03 01"
             case .fuelStatus:
                 return "03 02 04"
-            case .rpm:
-                let speedValue = currentMockSpeed()
-                let rpmDouble = currentMockRPM(fromSpeed: speedValue)
-                let rpmClamped = min(8000.0, max(800.0, rpmDouble))
-                let raw = Int(rpmClamped.rounded()) * 4 // OBD-II encoding for RPM
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                let hexA = String(format: "%02X", A)
-                let hexB = String(format: "%02X", B)
-                return "0C" + " " + hexA + " " + hexB
-            case .speed:
-                let speedValue = currentMockSpeed()
-                let clamped = max(0.0, min(255.0, speedValue))
-                let hexSpeed = String(format: "%02X", Int(clamped.rounded()))
-                return "0D" + " " + hexSpeed
-            case .coolantTemp:
-                // Ramp from 0 to 100°C over 60 seconds.
-                let now = Date()
-                if sessionState.testStart == nil {
-                    sessionState.testStart = now
-                }
-                let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
-                let clamped = max(0.0, min(60.0, elapsed))
-                let tempC = Int((clamped / 60.0) * 100.0) // 0…100
-                // OBD-II PID 0105 encoding: A = tempC + 40
-                let rawA = UInt8(max(0, min(140, tempC + 40)))
-                let hexTemp = String(format: "%02X", rawA)
-                return "05" + " " + hexTemp
-            case .maf:
-                // Approximate MAF (g/s) from RPM and a mild speed factor
-                let speedValue = currentMockSpeed()
-                let rpm = currentMockRPM(fromSpeed: speedValue)
-                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
-                let base = 2.0 + rpmN * 118.0
-                let withLoad = base * (0.8 + 0.4 * rpmN)
-                let mafGs = max(2.0, min(200.0, withLoad + smoothNoise(seed: 2, scale: 3.0)))
-                let raw = Int((mafGs * 100.0).rounded())
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                let hexA = String(format: "%02X", A)
-                let hexB = String(format: "%02X", B)
-                return "10" + " " + hexA + " " + hexB
             case .engineLoad:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
                 let rpmClamped = min(8000.0, max(800.0, rpm))
-                let throttleLike = ((rpmClamped - 800.0) / (8000.0 - 800.0)) // 0.0 … 1.0
+                let throttleLike = ((rpmClamped - 800.0) / (8000.0 - 800.0))
                 var load = throttleLike
                 if speedValue >= 40 && speedValue <= 80 {
                     let cruiseFactor = max(0.0, 1.0 - throttleLike * 1.4)
                     load -= 0.20 * cruiseFactor
                 }
-                if speedValue < 2 && rpmClamped < 1200 {
-                    load = max(load, 0.08 + smoothNoise(seed: 3, scale: 0.02))
-                }
                 load += smoothNoise(seed: 4, scale: 0.03)
                 load = max(0.0, min(1.0, load))
-                let percent = Int((load * 100.0).rounded())
-                let A = UInt8(max(0, min(255, Int((Double(percent) * 255.0 / 100.0).rounded()))))
-                let hexA = String(format: "%02X", A)
-                return "04" + " " + hexA
-            case .throttlePos:
-                // --- 1. Current State & Normalization ---
+                let percent = UInt8(clamping: Int((load * 255.0).rounded()))
+                return "04 " + String(format: "%02X", percent)
+            case .coolantTemp:
+                // Ramp 0…100C over 60s
                 let now = Date()
-                let speed = currentMockSpeed(now: now)
-                let rpm = currentMockRPM(fromSpeed: speed)
-
-                // Normalized RPM (0=idle_min..1=redline)
-                let idleRpm: Double = 800.0
-                let redlineRpm: Double = 8000.0
-                let rpmN = max(0.0, min(1.0, (rpm - idleRpm) / (redlineRpm - idleRpm)))
-
-                // Approximate longitudinal acceleration (km/h per second)
-                var accel: Double = 0
-                if let last = sessionState.lastTick {
-                    let dt = max(0.001, now.timeIntervalSince(last))
-                    let prevSpeed = currentMockSpeed(now: last)
-                    accel = (speed - prevSpeed) / dt
-                }
-
-                // --- 2. Baseline Driver Demand ---
-                // Start with an RPM-based target, simulating a desired power output.
-                // Base demand: low at idle/low RPM, higher at high RPM.
-                var demand = 0.15 + 0.45 * pow(rpmN, 2.0) // Non-linear response to RPM
-
-                // Add slow waves for general driving fluctuations (cruising)
-                demand += 0.10 * sin(sessionElapsed() * 0.15)
-                demand += 0.05 * sin(sessionElapsed() * 0.50 + 1.2)
-
-                // --- 3. Acceleration/Deceleration Response (Aggressive Driver Input) ---
-                let aggressiveAccelThreshold: Double = 5.0 // Strong acceleration
-                let aggressiveDecelThreshold: Double = -4.0 // Strong deceleration/braking
-
-                // Positive Acceleration Bias: Higher increase for positive accel
-                let positiveAccelBias = max(0.0, min(0.35, accel * 0.025))
-                demand += positiveAccelBias
-
-                // Negative Acceleration (Decel/Braking) Response: Reduce throttle sharply
-                let negativeAccelBias = max(-0.50, min(0.0, accel * 0.05))
-                demand += negativeAccelBias
-
-                // --- 4. Idle Minimum & Coasting Fuel Cut-Off (CFCO) Simulation ---
-                // Enforce minimum at idle
-                let isIdle = (rpm < 1100 && speed < 3)
-                if isIdle {
-                    // Idle is a small, stable opening with a tiny oscillation
-                    demand = max(demand, 0.06 + 0.01 * sin(sessionElapsed() * 1.5))
-                }
-
-                // Simulate throttle cut-off during strong engine braking/coasting
-                let isCoasting = (rpm > 1200 && accel < aggressiveDecelThreshold)
-                if isCoasting && !isIdle {
-                    // Drop throttle aggressively, but keep a small mechanical minimum (e.g., 2-5%)
-                    demand = min(demand, 0.02 + 0.03 * rpmN) // Small floor that rises slightly with RPM
-                }
-
-
-                // --- 5. Wide Open Throttle (WOT) High-Load Logic ---
-                // High load detected if very high RPM OR aggressive acceleration
-                let isHighLoad = (rpmN > 0.85) || (accel > aggressiveAccelThreshold)
-
-                if isHighLoad {
-                    // Aggressively target high demand (75% to 99%)
-                    let wotFloor = 0.75
-                    let wotCeiling = 0.99
-                    
-                    // Scale the target based on how deep into the high RPM zone we are
-                    let scaledRpmTarget = wotFloor + (wotCeiling - wotFloor) * min(1.0, (rpmN - 0.8) / 0.2)
-                    
-                    // Ensure demand is at least this high
-                    demand = max(demand, scaledRpmTarget)
-                }
-
-                // --- 6. Smooth Transition/Damping (Cruising) ---
-                // Use a slight low-pass filter to smooth the demand over time, mimicking a physical butterfly valve and ECU lag.
-                let cruiseSpeedRange = (40.0...100.0) // Higher speeds than before
-                let cruiseDampingFactor: Double = 0.35 // 35% of old value, 65% of new demand (more responsive)
-
-               
-
-
-                // --- 7. Final Clean-up (Noise and Clamp) ---
-                // Small sensor/actuator noise
-                demand += smoothNoise(seed: 5.5, scale: 0.015) // Slightly less noise
-
-                // Clamp and encode
-                demand = max(0.0, min(1.0, demand))
-                
-                // Encode on 0…255 scale expected by PID 0111 (.percent decoder)
-                let A = UInt8(clamping: Int((demand * 255.0).rounded()))
-                let hexPos = String(format: "%02X", A)
-                return "11" + " " + hexPos
-            case .fuelLevel:
-                let now = Date()
-                if sessionState.testStart == nil {
-                    sessionState.testStart = now
-                }
+                if sessionState.testStart == nil { sessionState.testStart = now }
                 let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
-                let drained = Int(elapsed / 10.0)
-                let fuelPercent = max(0, 90 - drained)
-                let byte = UInt8(max(0, min(255, Int((Double(fuelPercent) * 255.0 / 100.0).rounded()))))
-                let hexLevel = String(format: "%02X", byte)
-                return "2F" + " " + hexLevel
+                let clamped = max(0.0, min(60.0, elapsed))
+                let tempC = Int((clamped / 60.0) * 100.0)
+                let rawA = UInt8(max(0, min(140, tempC + 40)))
+                return "05 " + String(format: "%02X", rawA)
+            case .shortFuelTrim1:
+                // Oscillate around 0% +/- 5%
+                let trim = 128 + Int((sin(sessionElapsed() * 1.7) * 0.05 * 255.0).rounded())
+                let A = UInt8(clamping: trim)
+                return "06 " + String(format: "%02X", A)
+            case .longFuelTrim1:
+                // Slow drift around +2%
+                let trim = 128 + Int((sin(sessionElapsed() * 0.2) * 0.02 * 255.0).rounded())
+                let A = UInt8(clamping: trim)
+                return "07 " + String(format: "%02X", A)
+            case .shortFuelTrim2:
+                let trim = 128 + Int((cos(sessionElapsed() * 1.5) * 0.05 * 255.0).rounded())
+                let A = UInt8(clamping: trim)
+                return "08 " + String(format: "%02X", A)
+            case .longFuelTrim2:
+                let trim = 128 + Int((cos(sessionElapsed() * 0.25) * 0.02 * 255.0).rounded())
+                let A = UInt8(clamping: trim)
+                return "09 " + String(format: "%02X", A)
             case .fuelPressure:
                 let centerKPa = 400.0 + smoothNoise(seed: 6, scale: 25.0)
                 let kPa = max(200.0, min(600.0, centerKPa))
                 let A = UInt8(max(0, min(255, Int((kPa / 3.0).rounded()))))
-                let hexA = String(format: "%02X", A)
-                return "0A" + " " + hexA
-            case .intakeTemp:
-                let now = Date()
-                if sessionState.testStart == nil {
-                    sessionState.testStart = now
+                return "0A " + String(format: "%02X", A)
+            case .intakePressure:
+                let speedValue = currentMockSpeed()
+                let rpm = currentMockRPM(fromSpeed: speedValue)
+                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
+                var load = rpmN
+                if speedValue >= 40 && speedValue <= 80 {
+                    let cruiseFactor = max(0.0, 1.0 - rpmN * 1.4)
+                    load -= 0.20 * cruiseFactor
                 }
-                let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
-                let clamped = max(0.0, min(60.0, elapsed))
-                let tempC = Int((clamped / 60.0) * 70.0)
-                let rawA = UInt8(max(0, min(140, tempC + 40)))
-                let hexTemp = String(format: "%02X", rawA)
-                return "0F" + " " + hexTemp
+                load = max(0.0, min(1.0, load))
+                var kPa = 25.0 + load * 70.0 + smoothNoise(seed: 8, scale: 2.0)
+                kPa = max(20.0, min(100.0, kPa))
+                let A = UInt8(max(0, min(255, Int(kPa.rounded()))))
+                return "0B " + String(format: "%02X", A)
+            case .rpm:
+                let speedValue = currentMockSpeed()
+                let rpmDouble = currentMockRPM(fromSpeed: speedValue)
+                let rpmClamped = min(8000.0, max(800.0, rpmDouble))
+                let raw = Int(rpmClamped.rounded()) * 4
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
+                return "0C " + String(format: "%02X %02X", A, B)
+            case .speed:
+                let speedValue = currentMockSpeed()
+                let clamped = max(0.0, min(255.0, speedValue))
+                let hexSpeed = String(format: "%02X", Int(clamped.rounded()))
+                return "0D " + hexSpeed
             case .timingAdvance:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
@@ -553,31 +441,141 @@ private extension MOCKComm {
                 advance += smoothNoise(seed: 7, scale: 1.0)
                 let raw = Int((advance * 2.0).rounded()) + 64
                 let A = UInt8(max(0, min(255, raw)))
-                let hexA = String(format: "%02X", A)
-                return "0E" + " " + hexA
-            case .intakePressure:
+                return "0E " + String(format: "%02X", A)
+            case .intakeTemp:
+                let now = Date()
+                if sessionState.testStart == nil {
+                    sessionState.testStart = now
+                }
+                let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
+                let clamped = max(0.0, min(60.0, elapsed))
+                let tempC = Int((clamped / 60.0) * 70.0)
+                let rawA = UInt8(max(0, min(140, tempC + 40)))
+                return "0F " + String(format: "%02X", rawA)
+            case .maf:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
                 let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
-                var load = rpmN
-                if speedValue >= 40 && speedValue <= 80 {
-                    let cruiseFactor = max(0.0, 1.0 - rpmN * 1.4)
-                    load -= 0.20 * cruiseFactor
+                let base = 2.0 + rpmN * 118.0
+                let withLoad = base * (0.8 + 0.4 * rpmN)
+                let mafGs = max(2.0, min(200.0, withLoad + smoothNoise(seed: 2, scale: 3.0)))
+                let raw = Int((mafGs * 100.0).rounded())
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
+                return "10 " + String(format: "%02X %02X", A, B)
+            case .throttlePos:
+                // See previous detailed logic; simplified final demand retained
+                let now = Date()
+                let speed = currentMockSpeed(now: now)
+                let rpm = currentMockRPM(fromSpeed: speed)
+                let idleRpm: Double = 800.0
+                let redlineRpm: Double = 8000.0
+                let rpmN = max(0.0, min(1.0, (rpm - idleRpm) / (redlineRpm - idleRpm)))
+
+                var demand = 0.15 + 0.45 * pow(rpmN, 2.0)
+                demand += 0.10 * sin(sessionElapsed() * 0.15)
+                demand += 0.05 * sin(sessionElapsed() * 0.50 + 1.2)
+
+                var accel: Double = 0
+                if let last = sessionState.lastTick {
+                    let dt = max(0.001, now.timeIntervalSince(last))
+                    let prevSpeed = currentMockSpeed(now: last)
+                    accel = (speed - prevSpeed) / dt
                 }
-                load = max(0.0, min(1.0, load))
-                var kPa = 25.0 + load * 70.0 + smoothNoise(seed: 8, scale: 2.0)
-                kPa = max(20.0, min(100.0, kPa))
-                let A = UInt8(max(0, min(255, Int(kPa.rounded()))))
-                let hexA = String(format: "%02X", A)
-                return "0B" + " " + hexA
-            case .barometricPressure:
-                var kPa = 101.0 + smoothNoise(seed: 9, scale: 0.6)
-                kPa = max(95.0, min(105.0, kPa))
-                let A = UInt8(max(0, min(255, Int(kPa.rounded()))))
-                let hexA = String(format: "%02X", A)
-                return "33" + " " + hexA
-            case .fuelType:
-                return "01 01"
+
+                let positiveAccelBias = max(0.0, min(0.35, accel * 0.025))
+                let negativeAccelBias = max(-0.50, min(0.0, accel * 0.05))
+                demand += positiveAccelBias + negativeAccelBias
+
+                let isIdle = (rpm < 1100 && speed < 3)
+                if isIdle {
+                    demand = max(demand, 0.06 + 0.01 * sin(sessionElapsed() * 1.5))
+                }
+                let isCoasting = (rpm > 1200 && accel < -4.0)
+                if isCoasting && !isIdle {
+                    demand = min(demand, 0.02 + 0.03 * rpmN)
+                }
+
+                let isHighLoad = (rpmN > 0.85) || (accel > 5.0)
+                if isHighLoad {
+                    let wotFloor = 0.75
+                    let wotCeiling = 0.99
+                    let scaledRpmTarget = wotFloor + (wotCeiling - wotFloor) * min(1.0, (rpmN - 0.8) / 0.2)
+                    demand = max(demand, scaledRpmTarget)
+                }
+
+                demand += smoothNoise(seed: 5.5, scale: 0.015)
+                demand = max(0.0, min(1.0, demand))
+
+                let A = UInt8(clamping: Int((demand * 255.0).rounded()))
+                return "11 " + String(format: "%02X", A)
+            case .airStatus:
+                // Secondary air status bitfield (typical: upstream of cat, pulsed)
+                return "12 04"
+            case .O2Sensor:
+                // O2 sensors present bitmask (B1S1, B1S2 present)
+                return "13 03"
+            case .O2Bank1Sensor1:
+                // Narrowband voltage A and STFT B (%)
+                let v = max(0.1, min(0.9, 0.5 + smoothNoise(seed: 14, scale: 0.3)))
+                let A = UInt8(clamping: Int((v / 1.275) * 255.0))
+                let B = UInt8(128 + Int((smoothNoise(seed: 15, scale: 0.05) * 255.0)))
+                return "14 " + String(format: "%02X %02X", A, B)
+            case .O2Bank1Sensor2:
+                let v = max(0.1, min(0.9, 0.55 + smoothNoise(seed: 16, scale: 0.25)))
+                let A = UInt8(clamping: Int((v / 1.275) * 255.0))
+                let B = UInt8(128 + Int((smoothNoise(seed: 17, scale: 0.04) * 255.0)))
+                return "15 " + String(format: "%02X %02X", A, B)
+            case .O2Bank1Sensor3:
+                return "16 80 80"
+            case .O2Bank1Sensor4:
+                return "17 80 80"
+            case .O2Bank2Sensor1:
+                let v = max(0.1, min(0.9, 0.48 + smoothNoise(seed: 18, scale: 0.28)))
+                let A = UInt8(clamping: Int((v / 1.275) * 255.0))
+                let B = UInt8(128 + Int((smoothNoise(seed: 19, scale: 0.05) * 255.0)))
+                return "18 " + String(format: "%02X %02X", A, B)
+            case .O2Bank2Sensor2:
+                let v = max(0.1, min(0.9, 0.52 + smoothNoise(seed: 20, scale: 0.22)))
+                let A = UInt8(clamping: Int((v / 1.275) * 255.0))
+                let B = UInt8(128 + Int((smoothNoise(seed: 21, scale: 0.04) * 255.0)))
+                return "19 " + String(format: "%02X %02X", A, B)
+            case .O2Bank2Sensor3:
+                return "1A 80 80"
+            case .O2Bank2Sensor4:
+                return "1B 80 80"
+            case .obdcompliance:
+                // OBD-II as per SAE J1979 (value 0x03 common)
+                return "1C 03"
+            case .O2SensorsALT:
+                // Alternate O2 presence map
+                return "1D 00"
+            case .auxInputStatus:
+                // Bit0 = Power Take Off active? 0 = off
+                return "1E 00"
+            case .runTime:
+                _ = sessionElapsed()
+                let seconds = Int(sessionState.accumulatedSeconds.rounded())
+                let raw = max(0, min(65535, seconds))
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
+                return "1F " + String(format: "%02X %02X", A, B)
+            case .pidsB:
+                return "20 90 07 E0 11 00"
+            case .distanceWMIL:
+                _ = sessionElapsed()
+                let km = sessionState.accumulatedMeters / 1000.0
+                let raw = max(0, min(65535, Int(km.rounded())))
+                let A = (raw >> 8) & 0xFF
+                let B = 0xFF & raw
+                return "21 " + String(format: "%02X %02X", A, B)
+            case .fuelRailPressureVac:
+                // Relative to manifold vacuum (10 kPa per bit)
+                let kPa = 300.0 + smoothNoise(seed: 22, scale: 15.0)
+                let raw = Int((kPa / 10.0).rounded())
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
+                return "22 " + String(format: "%02X %02X", A, B)
             case .fuelRailPressureDirect:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
@@ -588,13 +586,205 @@ private extension MOCKComm {
                 let raw = Int((kPa / 10.0).rounded())
                 let A = (raw >> 8) & 0xFF
                 let B = raw & 0xFF
-                let hexA = String(format: "%02X", A)
-                let hexB = String(format: "%02X", B)
-                return "23" + " " + hexA + " " + hexB
+                return "23 " + String(format: "%02X %02X", A, B)
+            case .O2Sensor1WRVolatage,
+                 .O2Sensor2WRVolatage,
+                 .O2Sensor3WRVolatage,
+                 .O2Sensor4WRVolatage,
+                 .O2Sensor5WRVolatage,
+                 .O2Sensor6WRVolatage,
+                 .O2Sensor7WRVolatage,
+                 .O2Sensor8WRVolatage:
+                // Wideband voltage as 2-byte value (0..8192mV), plus 2 bytes reserved
+                // We'll return ~2.5V nominal with slight noise
+                let baseMv = 2500.0 + smoothNoise(seed: 23, scale: 200.0) * 1000.0
+                let raw = max(0, min(8192, Int(baseMv / 1.0)))
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
+                return String(format: "%02X %02X %02X %02X %02X",
+                              // PID
+                              pidByte(for: command),
+                              A, B, 0x80, 0x00)
+            case .commandedEGR:
+                let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.2 + 0.2 * sin(sessionElapsed() * 0.3))) * 255.0).rounded()))
+                return "2C " + String(format: "%02X 00 00", pct)
+            case .EGRError:
+                let centered = 128 + Int((smoothNoise(seed: 24, scale: 0.05) * 255.0))
+                let A = UInt8(clamping: centered)
+                return "2D " + String(format: "%02X 00 00", A)
+            case .evaporativePurge:
+                let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.1 + 0.3 * sin(sessionElapsed() * 0.2))) * 255.0).rounded()))
+                return "2E " + String(format: "%02X 00 00", pct)
+            case .fuelLevel:
+                let now = Date()
+                if sessionState.testStart == nil {
+                    sessionState.testStart = now
+                }
+                let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
+                let drained = Int(elapsed / 10.0)
+                let fuelPercent = max(0, 90 - drained)
+                let byte = UInt8(max(0, min(255, Int((Double(fuelPercent) * 255.0 / 100.0).rounded()))))
+                return "2F " + String(format: "%02X 00 00", byte)
+            case .warmUpsSinceDTCCleared:
+                let cycles = min(40, Int(sessionElapsed() / 300.0))
+                return "30 " + String(format: "00 00 %02X", cycles)
+            case .distanceSinceDTCCleared:
+                _ = sessionElapsed()
+                let km = sessionState.accumulatedMeters / 1000.0
+                let raw = max(0, min(65535, Int(km.rounded())))
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
+                return "31 " + String(format: "%02X %02X", A, B)
+            case .evapVaporPressure:
+                // Typical signed pressure in Pa; here as 16-bit signed per your decoder
+                let pa = Int(100 + smoothNoise(seed: 25, scale: 50.0) * 100.0)
+                let raw = UInt16(bitPattern: Int16(clamping: pa))
+                let A = Int((raw >> 8) & 0xFF)
+                let B = Int(raw & 0xFF)
+                return "32 " + String(format: "%02X %02X", A, B)
+            case .barometricPressure:
+                var kPa = 101.0 + smoothNoise(seed: 9, scale: 0.6)
+                kPa = max(95.0, min(105.0, kPa))
+                let A = UInt8(max(0, min(255, Int(kPa.rounded()))))
+                return "33 " + String(format: "%02X", A)
+            case .O2Sensor1WRCurrent,
+                 .O2Sensor2WRCurrent,
+                 .O2Sensor3WRCurrent,
+                 .O2Sensor4WRCurrent,
+                 .O2Sensor5WRCurrent,
+                 .O2Sensor6WRCurrent,
+                 .O2Sensor7WRCurrent,
+                 .O2Sensor8WRCurrent:
+                // Centered current around 0 mA, scaled to signed byte around 128
+                let centered = 128 + Int((smoothNoise(seed: 26, scale: 0.20) * 255.0))
+                let A = UInt8(clamping: centered)
+                return String(format: "%02X %02X %02X",
+                              pidByte(for: command),
+                              A, 0x00)
+            case .catalystTempB1S1,
+                 .catalystTempB2S1,
+                 .catalystTempB1S2,
+                 .catalystTempB2S2:
+                // Use an exhaust temperature model 300–800C
+                let tC = 300.0 + 250.0 * (0.5 + 0.5 * sin(sessionElapsed() * 0.1)) + smoothNoise(seed: 27, scale: 15.0)
+                let raw = Int(((tC + 40.0) * 10.0).rounded())
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
+                return String(format: "%02X %02X %02X",
+                              pidByte(for: command),
+                              A, B)
+            case .pidsC:
+                return "40 FA DC 80 00 00"
+            case .statusDriveCycle:
+                // Similar to 0101 but for this drive cycle
+                return "41 00 07 E5 00"
+            case .controlModuleVoltage:
+                return "42 35 04"
+            case .absoluteLoad:
+                // Percent of full load derived from throttle/MAF
+                let speedValue = currentMockSpeed()
+                let rpm = currentMockRPM(fromSpeed: speedValue)
+                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
+                var load = 0.1 + 0.8 * rpmN
+                load += smoothNoise(seed: 28, scale: 0.05)
+                load = max(0.0, min(1.0, load))
+                let raw = UInt16(clamping: Int((load * 65535.0).rounded()))
+                let A = Int((raw >> 8) & 0xFF)
+                let B = Int(raw & 0xFF)
+                return "43 " + String(format: "%02X %02X", A, B)
+            case .commandedEquivRatio:
+                // Lambda around 1.00 +/- 0.03
+                let lambda = 1.0 + smoothNoise(seed: 29, scale: 0.03)
+                let raw = UInt16(clamping: Int((lambda * 32768.0).rounded()))
+                let A = Int((raw >> 8) & 0xFF)
+                let B = Int(raw & 0xFF)
+                return "44 " + String(format: "%02X %02X", A, B)
+            case .relativeThrottlePos:
+                let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.2 + 0.6 * sin(sessionElapsed() * 0.25))) * 255.0).rounded()))
+                return "45 " + String(format: "%02X 00", pct)
+            case .ambientAirTemp:
+                return "46 32"
+            case .throttlePosB,
+                 .throttlePosC,
+                 .throttlePosD,
+                 .throttlePosE,
+                 .throttlePosF:
+                // Mirror primary throttle with small offsets
+                let base = 0.2 + 0.4 * (0.5 + 0.5 * sin(sessionElapsed() * 0.3))
+                let offset = smoothNoise(seed: 30, scale: 0.03)
+                let pct = UInt8(clamping: Int((max(0.0, min(1.0, base + offset)) * 255.0).rounded()))
+                return String(format: "%02X %02X 00",
+                              pidByte(for: command),
+                              pct)
+            case .throttleActuator:
+                let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.25 + 0.5 * sin(sessionElapsed() * 0.22))) * 255.0).rounded()))
+                return "4C " + String(format: "%02X 00", pct)
+            case .runTimeMIL:
+                // Time with MIL on; simulate as 0 in mock
+                return "4D 00 00"
+            case .timeSinceDTCCleared:
+                let seconds = Int(sessionElapsed().rounded())
+                let raw = UInt16(clamping: seconds)
+                let A = Int((raw >> 8) & 0xFF)
+                let B = Int(raw & 0xFF)
+                return "4E " + String(format: "%02X %02X", A, B)
+            case .maxValues:
+                // Provide plausible static maxima bytes
+                return "4F FF FF FF FF FF"
+            case .maxMAF:
+                // Max MAF in g/s encoded per decoder (A*256+B)/50
+                let maxMafGs = 300.0
+                let raw = UInt16(clamping: Int((maxMafGs * 50.0).rounded()))
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
+                return "50 " + String(format: "%02X %02X", A, B)
+            case .fuelType:
+                return "51 01"
             case .ethanoPercent:
                 let A = UInt8(26)
-                let hexA = String(format: "%02X", A)
-                return "52" + " " + hexA
+                return "52 " + String(format: "%02X", A)
+            case .evapVaporPressureAbs:
+                // Absolute pressure in Pa (signed), simulate near 300 Pa
+                let pa = Int(300 + smoothNoise(seed: 31, scale: 50.0) * 100.0)
+                let raw = UInt16(bitPattern: Int16(clamping: pa))
+                let A = Int((raw >> 8) & 0xFF)
+                let B = Int(raw & 0xFF)
+                return "53 " + String(format: "%02X %02X", A, B)
+            case .evapVaporPressureAlt:
+                // Alternate encoding; reuse same model
+                let pa = Int(250 + smoothNoise(seed: 32, scale: 60.0) * 100.0)
+                let raw = UInt16(bitPattern: Int16(clamping: pa))
+                let A = Int((raw >> 8) & 0xFF)
+                let B = Int(raw & 0xFF)
+                return "54 " + String(format: "%02X %02X", A, B)
+            case .shortO2TrimB1:
+                let A = UInt8(clamping: 128 + Int((smoothNoise(seed: 33, scale: 0.06) * 255.0)))
+                return "55 " + String(format: "%02X 00", A)
+            case .longO2TrimB1:
+                let A = UInt8(clamping: 128 + Int((smoothNoise(seed: 34, scale: 0.03) * 255.0)))
+                return "56 " + String(format: "%02X 00", A)
+            case .shortO2TrimB2:
+                let A = UInt8(clamping: 128 + Int((smoothNoise(seed: 35, scale: 0.06) * 255.0)))
+                return "57 " + String(format: "%02X 00", A)
+            case .longO2TrimB2:
+                let A = UInt8(clamping: 128 + Int((smoothNoise(seed: 36, scale: 0.03) * 255.0)))
+                return "58 " + String(format: "%02X 00", A)
+            case .fuelRailPressureAbs:
+                let kPa = 5000.0 + smoothNoise(seed: 37, scale: 300.0)
+                let raw = UInt16(clamping: Int((kPa / 10.0).rounded()))
+                let A = Int((raw >> 8) & 0xFF)
+                let B = Int(raw & 0xFF)
+                return "59 " + String(format: "%02X %02X", A, B)
+            case .relativeAccelPos:
+                let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.1 + 0.8 * (0.5 + 0.5 * sin(sessionElapsed() * 0.4)))) * 255.0).rounded()))
+                return "5A " + String(format: "%02X", pct)
+            case .hybridBatteryLife:
+                let decline = sessionElapsed() / 600.0
+                let percent = max(50.0, 90.0 - decline)
+                let raw = max(0, min(65535, Int((percent / 100.0) * 65535.0)))
+                let A = (raw >> 8) & 0xFF
+                let B = raw & 0xFF
+                return "5B " + String(format: "%02X %02X", A, B)
             case .engineOilTemp:
                 let t = sessionElapsed()
                 let target = 100.0
@@ -602,8 +792,7 @@ private extension MOCKComm {
                 let temp = ambient + (target - ambient) * (1.0 - exp(-t / 900.0)) + smoothNoise(seed: 11, scale: 1.5)
                 let clamped = max(-40.0, min(150.0, temp))
                 let rawA = UInt8(max(0, min(255, Int((clamped + 40.0).rounded()))))
-                let hexA = String(format: "%02X", rawA)
-                return "5C" + " " + hexA
+                return "5C " + String(format: "%02X", rawA)
             case .fuelInjectionTiming:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
@@ -614,9 +803,7 @@ private extension MOCKComm {
                 let raw = Int(((deg + 210.0) * 10.0).rounded())
                 let A = (raw >> 8) & 0xFF
                 let B = raw & 0xFF
-                let hexA = String(format: "%02X", A)
-                let hexB = String(format: "%02X", B)
-                return "5D" + " " + hexA + " " + hexB
+                return "5D " + String(format: "%02X %02X", A, B)
             case .fuelRate:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
@@ -627,53 +814,9 @@ private extension MOCKComm {
                 let raw = Int((lph * 20.0).rounded())
                 let A = (raw >> 8) & 0xFF
                 let B = raw & 0xFF
-                let hexA = String(format: "%02X", A)
-                let hexB = String(format: "%02X", B)
-                return "5E" + " " + hexA + " " + hexB
+                return "5E " + String(format: "%02X %02X", A, B)
             case .emissionsReq:
-                return "01 01"
-            case .runTime:
-                _ = sessionElapsed()
-                let seconds = Int(sessionState.accumulatedSeconds.rounded())
-                let raw = max(0, min(65535, seconds))
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                let hexA = String(format: "%02X", A)
-                let hexB = String(format: "%02X", B)
-                return "1F" + " " + hexA + " " + hexB
-            case .distanceSinceDTCCleared:
-                _ = sessionElapsed()
-                let km = sessionState.accumulatedMeters / 1000.0
-                let raw = max(0, min(65535, Int(km.rounded())))
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                let hexA = String(format: "%02X", A)
-                let hexB = String(format: "%02X", B)
-                return "31" + " " + hexA + " " + hexB
-            case .distanceWMIL:
-                _ = sessionElapsed()
-                let km = sessionState.accumulatedMeters / 1000.0
-                let raw = max(0, min(65535, Int(km.rounded())))
-                let A = (raw >> 8) & 0xFF
-                let B = 0xFF & raw
-                let hexA = String(format: "%02X", A)
-                let hexB = String(format: "%02X", B)
-                return "21" + " " + hexA + " " + hexB
-            case .warmUpsSinceDTCCleared:
-                let cycles = min(40, Int(sessionElapsed() / 300.0))
-                let hexWarmUp = String(format: "%02X", cycles)
-                return "30" + " 00 00 " + hexWarmUp
-            case .hybridBatteryLife:
-                let decline = sessionElapsed() / 600.0
-                let percent = max(50.0, 90.0 - decline)
-                let raw = max(0, min(65535, Int((percent / 100.0) * 65535.0)))
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                let hexA = String(format: "%02X", A)
-                let hexB = String(format: "%02X", B)
-                return "5B" + " " + hexA + " " + hexB
-            default:
-                return nil
+                return "5F 01"
             }
 
         case .mode6(let command):
@@ -717,6 +860,15 @@ private extension MOCKComm {
         }
         return nil
     }
+
+    // Helper to get PID byte for a Mode1 case (for grouped handling above)
+    func pidByte(for mode1: OBDCommand.Mode1) -> UInt8 {
+        let hex = mode1.properties.command.dropFirst(2) // drop "01"
+        let pidHex = String(hex)
+        return UInt8(pidHex, radix: 16) ?? 0x00
+    }
+
+  
 }
 
 extension String {
