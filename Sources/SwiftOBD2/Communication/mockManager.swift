@@ -593,6 +593,9 @@ private extension MOCKComm {
                 return "22 " + String(format: "%02X %02X", A, B)
 
             case .fuelRailPressureDirect:
+                
+                return "23 02 BF"
+                /*
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
                 let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
@@ -602,7 +605,7 @@ private extension MOCKComm {
                 let raw = Int((kPa / 10.0).rounded())
                 let A = (raw >> 8) & 0xFF
                 let B = raw & 0xFF
-                return "23 " + String(format: "%02X %02X", A, B)
+                return "23 " + String(format: "%02X %02X", A, B) */
             case .O2Sensor1WRVolatage,
                  .O2Sensor2WRVolatage,
                  .O2Sensor3WRVolatage,

@@ -75,12 +75,16 @@ struct BitArray {
     }
 }
 
+
 extension Unit {
+    static let gallonsPerHour = Unit(symbol: "gal/h")
+    static let litersPerHour = Unit(symbol: "L/h")
     static let percent = Unit(symbol: "%")
     static let count = Unit(symbol: "count")
     //    static let celsius = Unit(symbol: "°C")
     static let degrees = Unit(symbol: "°")
     static let gramsPerSecond = Unit(symbol: "g/s")
+    static let poundsPerMinute = Unit(symbol: "lb/min")
     static let none = Unit(symbol: "")
     static let rpm = Unit(symbol: "rpm")
     //    static let kph = Unit(symbol: "KP/H")
@@ -155,7 +159,11 @@ class UAS {
                 self.unit = UnitPressure.poundsForcePerSquareInch
                 return value * 0.145038  // Convert kPa to psi
             case .gramsPerSecond:
-                return value * 0.00220462  // Convert grams/sec to pounds/sec
+                return value * 0.132277  // Convert grams/sec to pounds/min
+                self.unit = .poundsPerMinute
+            case .litersPerHour:
+                return value * 0.264172  // Convert liters per hour to gallons
+                self.unit = .gallonsPerHour
             case .bar:
                 self.unit = UnitPressure.poundsForcePerSquareInch
                 return value * 14.5038  // Convert bar to psi
@@ -483,20 +491,37 @@ struct MonitorDecoder: Decoder {
 }
 
 struct FuelRateDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<
-        DecodeResult, DecodeError
-    > {
-        let value = Double(bytesToInt(data)) * 0.05
-        return .success(
-            (.measurementResult(
-                MeasurementResult(
-                    value: value,
-                    unit: UnitFuelEfficiency.litersPer100Kilometers
-                )
-            ))
-        )
+    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+        // Make a defensive copy of the data
+        let bytes = Data(data)
+
+        // Must have at least 2 bytes (A, B)
+        guard bytes.count >= 2 else {
+            return .failure(.invalidData)
+        }
+
+        // Extract A and B
+        let A = Int(bytes[0])
+        let B = Int(bytes[1])
+
+        // SAE J1979 PID 0x5E formula: (A * 256 + B) / 20 = L/h
+        let fuelRateLph = Double((A << 8) | B) * 0.05
+
+        // Choose units based on user preference
+        let result: MeasurementResult
+        switch unit {
+        case .imperial:
+            // Convert liters/hour → gallons/hour
+            let gph = fuelRateLph * 0.264172
+            result = MeasurementResult(value: gph, unit: .gallonsPerHour)
+        default:
+            result = MeasurementResult(value: fuelRateLph, unit: .litersPerHour)
+        }
+
+        return .success(.measurementResult(result))
     }
 }
+
 
 struct DTCDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<
