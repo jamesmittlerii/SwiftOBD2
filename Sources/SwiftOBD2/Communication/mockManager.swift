@@ -430,18 +430,28 @@ private extension MOCKComm {
             case .timingAdvance:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
-                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
+                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (6000.0 - 800.0)))
+
                 var load = rpmN
                 if speedValue >= 40 && speedValue <= 80 {
-                    let cruiseFactor = max(0.0, 1.0 - rpmN * 1.4)
-                    load -= 0.20 * cruiseFactor
+                    let cruiseFactor = max(0.0, 1.0 - rpmN * 1.2)
+                    load -= 0.25 * cruiseFactor
                 }
                 load = max(0.0, min(1.0, load))
-                var advance = 15.0 * (1.0 - load) - 5.0 * rpmN
+
+                // Realistic base curve (idle ~10°, cruise ~30°, WOT ~15°)
+                var advance = 10.0 + (rpmN * 25.0) - (load * 12.0)
                 advance += smoothNoise(seed: 7, scale: 1.0)
-                let raw = Int((advance * 2.0).rounded()) + 64
-                let A = UInt8(max(0, min(255, raw)))
+                advance = max(2.0, min(45.0, advance))
+
+                // CORRECT OBD-II ENCODING: A = (advance + 64) * 2
+                let raw = max(0, min(255, Int((advance + 64.0) * 2.0)))
+                let A = UInt8(raw)
+
                 return "0E " + String(format: "%02X", A)
+
+
+
             case .intakeTemp:
                 let now = Date()
                 if sessionState.testStart == nil {
@@ -570,12 +580,18 @@ private extension MOCKComm {
                 let B = 0xFF & raw
                 return "21 " + String(format: "%02X %02X", A, B)
             case .fuelRailPressureVac:
-                // Relative to manifold vacuum (10 kPa per bit)
-                let kPa = 300.0 + smoothNoise(seed: 22, scale: 15.0)
+                // Simulate vacuum-referenced rail: rises with load
+                let speed = currentMockSpeed()
+                let rpm = currentMockRPM(fromSpeed: speed)
+                let load = max(0.0, min(1.0, (rpm - 800.0) / (6000.0 - 800.0)))
+
+                // Idle ≈300 kPa → WOT ≈400 kPa
+                let kPa = 300.0 + (load * 100.0) + smoothNoise(seed: 22, scale: 10.0)
                 let raw = Int((kPa / 10.0).rounded())
                 let A = (raw >> 8) & 0xFF
                 let B = raw & 0xFF
                 return "22 " + String(format: "%02X %02X", A, B)
+
             case .fuelRailPressureDirect:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
@@ -655,12 +671,15 @@ private extension MOCKComm {
                  .O2Sensor6WRCurrent,
                  .O2Sensor7WRCurrent,
                  .O2Sensor8WRCurrent:
-                // Centered current around 0 mA, scaled to signed byte around 128
-                let centered = 128 + Int((smoothNoise(seed: 26, scale: 0.20) * 255.0))
-                let A = UInt8(clamping: centered)
+                // Simulate pump-cell current ±2 mA around stoichiometric (128)
+                // Slow oscillation rich↔lean, ±20 counts (~±2 mA)
+                let oscillation = sin(sessionElapsed() * 1.5) * 20.0
+                let noise = smoothNoise(seed: 26, scale: 2.0)
+                let rawA = UInt8(clamping: Int(128 + oscillation + noise))
                 return String(format: "%02X %02X %02X",
                               pidByte(for: command),
-                              A, 0x00)
+                              rawA, 0x00)
+
             case .catalystTempB1S1,
                  .catalystTempB2S1,
                  .catalystTempB1S2,
@@ -670,7 +689,7 @@ private extension MOCKComm {
                 let raw = Int(((tC + 40.0) * 10.0).rounded())
                 let A = (raw >> 8) & 0xFF
                 let B = raw & 0xFF
-                return String(format: "%02X %02X %02X",
+                return String(format: "%02X %02X",
                               pidByte(for: command),
                               A, B)
             case .pidsC:
@@ -699,12 +718,10 @@ private extension MOCKComm {
                 let A = Int((raw >> 8) & 0xFF)
                 let B = Int(raw & 0xFF)
                 return "44 " + String(format: "%02X %02X", A, B)
-            case .relativeThrottlePos:
-                let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.2 + 0.6 * sin(sessionElapsed() * 0.25))) * 255.0).rounded()))
-                return "45 " + String(format: "%02X 00", pct)
-            case .ambientAirTemp:
+             case .ambientAirTemp:
                 return "46 32"
-            case .throttlePosB,
+            case .relativeThrottlePos,
+                .throttlePosB,
                  .throttlePosC,
                  .throttlePosD,
                  .throttlePosE,
@@ -770,11 +787,13 @@ private extension MOCKComm {
                 let A = UInt8(clamping: 128 + Int((smoothNoise(seed: 36, scale: 0.03) * 255.0)))
                 return "58 " + String(format: "%02X 00", A)
             case .fuelRailPressureAbs:
-                let kPa = 5000.0 + smoothNoise(seed: 37, scale: 300.0)
-                let raw = UInt16(clamping: Int((kPa / 10.0).rounded()))
+                // Simulate returnless port fuel injection: ~400 kPa ±10%
+                let kPa = 400.0 + smoothNoise(seed: 37, scale: 40.0) // 360–440 kPa
+                let raw = UInt16(clamping: Int((kPa / 10.0).rounded())) // per spec (A*256+B)*10
                 let A = Int((raw >> 8) & 0xFF)
                 let B = Int(raw & 0xFF)
                 return "59 " + String(format: "%02X %02X", A, B)
+
             case .relativeAccelPos:
                 let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.1 + 0.8 * (0.5 + 0.5 * sin(sessionElapsed() * 0.4)))) * 255.0).rounded()))
                 return "5A " + String(format: "%02X", pct)
@@ -878,3 +897,4 @@ extension String {
         }
     }
 }
+
