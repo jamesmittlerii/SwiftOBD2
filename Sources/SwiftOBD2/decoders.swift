@@ -960,21 +960,37 @@ struct SingleDTCDecoder: Decoder {
 }
 
 struct CurrentCenteredDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<
-        DecodeResult, DecodeError
-    > {
-        var value = Double(bytesToInt(data.dropFirst(2)))
-        value = (value / 256.0) - 128.0
+    func decode(data: Data, unit: MeasurementUnit)
+        -> Result<DecodeResult, DecodeError>
+    {
+        // Make a local copy so we can safely manipulate bytes
+        var bytes = data
+
+        // If the payload includes mode + PID (e.g. 41 3A …), drop those two bytes
+        if bytes.count >= 3 && bytes[0] == 0x41 {
+            bytes = Data(bytes.dropFirst(2))
+        }
+
+        // Ensure we have at least one byte of actual data
+        guard let A = bytes.first else {
+            return .failure(.invalidData)
+        }
+
+        // Decode wideband O₂ pump current (±2 mA full scale)
+        let current_mA = (Double(A) - 128.0) * (2.0 / 128.0)
+
         return .success(
             .measurementResult(
                 MeasurementResult(
-                    value: value,
+                    value: current_mA,
                     unit: UnitElectricCurrent.milliamperes
                 )
             )
         )
     }
 }
+
+
 
 struct PercentCenteredDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<
