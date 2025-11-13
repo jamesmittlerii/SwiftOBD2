@@ -99,6 +99,7 @@ extension Unit {
 class UAS {
     let signed: Bool
     let scale: Double
+    // This is the base unit associated with the raw scaling (assume metric base)
     var unit: Unit
     let offset: Double
 
@@ -110,70 +111,70 @@ class UAS {
     }
 
     func decode(bytes: Data, _ unit_: MeasurementUnit = .metric) -> MeasurementResult {
-            guard !bytes.isEmpty else {
-                return MeasurementResult(value: 0, unit: unit)
-            }
-
-            // Combine bytes into integer
-            let bitWidth = bytes.count * 8
-            var intValue: Int = 0
-
-            // Combine as big-endian (OBD-II standard)
-            for byte in bytes {
-                intValue = (intValue << 8) | Int(byte)
-            }
-
-            // Interpret signed if needed
-            if signed {
-                // Convert to signed value safely using bit masking
-                let signBit = 1 << (bitWidth - 1)
-                if (intValue & signBit) != 0 {
-                    intValue -= 1 << bitWidth
-                }
-            }
-
-            // Apply scaling and offset
-            var scaledValue = Double(intValue) * scale + offset
-
-            // Convert to imperial if needed
-            if unit_ == .imperial {
-                scaledValue = convertToImperial(scaledValue, unitType: self.unit)
-            }
-
-            return MeasurementResult(value: scaledValue, unit: unit)
+        guard !bytes.isEmpty else {
+            // Return zero in the base unit if no data
+            return MeasurementResult(value: 0, unit: unit)
         }
 
+        // Combine bytes into integer (big-endian per OBD-II)
+        let bitWidth = bytes.count * 8
+        var intValue: Int = 0
+        for byte in bytes {
+            intValue = (intValue << 8) | Int(byte)
+        }
 
-        private func convertToImperial(_ value: Double, unitType: Unit) -> Double {
-            switch unitType {
-            case UnitTemperature.celsius:
-                self.unit = UnitTemperature.fahrenheit
-                return (value * 1.8) + 32  // Convert Celsius to Fahrenheit
-            case UnitLength.kilometers:
-                self.unit = UnitLength.miles
-                return value * 0.621371  // Convert km to miles
-            case UnitSpeed.kilometersPerHour:
-                self.unit = UnitSpeed.milesPerHour
-                return value * 0.621371  // Convert km/h to mph
-            case UnitPressure.kilopascals:
-                self.unit = UnitPressure.poundsForcePerSquareInch
-                return value * 0.145038  // Convert kPa to psi
-            case .gramsPerSecond:
-                self.unit = .poundsPerMinute
-                return value * 0.132277  // Convert grams/sec to pounds/min
-                
-            case .litersPerHour:
-                self.unit = .gallonsPerHour
-                return value * 0.264172  // Convert liters per hour to gallons
-                
-            case .bar:
-                self.unit = UnitPressure.poundsForcePerSquareInch
-                return value * 14.5038  // Convert bar to psi
-            default:
-                return value  // Other units remain unchanged
+        // Interpret signed if needed
+        if signed {
+            let signBit = 1 << (bitWidth - 1)
+            if (intValue & signBit) != 0 {
+                intValue -= 1 << bitWidth
             }
+        }
+
+        // Apply scaling and offset in base unit
+        let baseValue = Double(intValue) * scale + offset
+        let baseUnit = self.unit
+
+        // Convert only for imperial request, without mutating shared state
+        if unit_ == .imperial {
+            let (convertedValue, convertedUnit) = convertToImperial(value: baseValue, baseUnit: baseUnit)
+            return MeasurementResult(value: convertedValue, unit: convertedUnit)
+        } else {
+            // Metric request: return as base
+            return MeasurementResult(value: baseValue, unit: baseUnit)
         }
     }
+
+    // Stateless converter: returns a converted value and unit, does NOT mutate self.unit
+    private func convertToImperial(value: Double, baseUnit: Unit) -> (Double, Unit) {
+        switch baseUnit {
+        case UnitTemperature.celsius:
+            return ((value * 1.8) + 32.0, UnitTemperature.fahrenheit) // °C → °F
+
+        case UnitLength.kilometers:
+            return (value * 0.621371, UnitLength.miles) // km → mi
+
+        case UnitSpeed.kilometersPerHour:
+            return (value * 0.621371, UnitSpeed.milesPerHour) // km/h → mph
+
+        case UnitPressure.kilopascals:
+            return (value * 0.145038, UnitPressure.poundsForcePerSquareInch) // kPa → psi
+
+        case .gramsPerSecond:
+            return (value * 0.132277, .poundsPerMinute) // g/s → lb/min
+
+        case .litersPerHour:
+            return (value * 0.264172, .gallonsPerHour) // L/h → gal/h
+
+        case .bar:
+            return (value * 14.5038, UnitPressure.poundsForcePerSquareInch) // bar → psi
+
+        default:
+            // No imperial mapping: leave unchanged
+            return (value, baseUnit)
+        }
+    }
+}
 
 func twosComp(_ value: Int, length: Int) -> Int {
     let mask = (1 << length) - 1
@@ -217,12 +218,7 @@ private var uasIDS: [UInt8: UAS] = {
             scale: 1,
             unit: UnitElectricResistance.kiloohms
         ),
-        0x16: UAS(
-            signed: false,
-            scale: 0.1,
-            unit: UnitTemperature.celsius,
-            offset: -40.0
-        ),
+        0x16: UAS(signed: false, scale: 0.1, unit: UnitTemperature.celsius, offset: -40.0),
         0x17: UAS(signed: false, scale: 0.01, unit: UnitPressure.kilopascals),
         0x18: UAS(signed: false, scale: 0.0117, unit: UnitPressure.kilopascals),
         0x19: UAS(signed: false, scale: 0.079, unit: UnitPressure.kilopascals),
