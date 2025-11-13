@@ -105,23 +105,40 @@ class UAS {
         self.offset = offset
     }
 
-    func decode(bytes: Data, _ unit_: MeasurementUnit = .metric)
-        -> MeasurementResult
-    {
-        var value = bytesToInt(bytes)
-
-        if signed {
-            value = twosComp(value, length: bytes.count * 8)
+    func decode(bytes: Data, _ unit_: MeasurementUnit = .metric) -> MeasurementResult {
+        guard !bytes.isEmpty else {
+            return MeasurementResult(value: 0, unit: unit)
         }
 
-        var scaledValue = Double(value) * scale + offset
+        // Combine bytes into integer
+        let bitWidth = bytes.count * 8
+        var intValue: Int = 0
 
+        // Combine as big-endian (OBD-II standard)
+        for byte in bytes {
+            intValue = (intValue << 8) | Int(byte)
+        }
+
+        // Interpret signed if needed
+        if signed {
+            // Convert to signed value safely using bit masking
+            let signBit = 1 << (bitWidth - 1)
+            if (intValue & signBit) != 0 {
+                intValue -= 1 << bitWidth
+            }
+        }
+
+        // Apply scaling and offset
+        var scaledValue = Double(intValue) * scale + offset
+
+        // Convert to imperial if needed
         if unit_ == .imperial {
             scaledValue = convertToImperial(scaledValue, unitType: self.unit)
         }
 
         return MeasurementResult(value: scaledValue, unit: unit)
     }
+
 
     private func convertToImperial(_ value: Double, unitType: Unit) -> Double {
         switch unitType {
@@ -683,36 +700,27 @@ struct GMACPressureDecoder: Decoder {
 
 
 struct EvapPressureDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<
-        DecodeResult, DecodeError
-    > {
-        guard data.count > 1 else {
-            return .failure(.invalidData)
-        }
+    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+        // Copy to owned storage and avoid subscripts
+        let bytes = Array(data.prefix(2))
+        guard bytes.count == 2 else { return .failure(.invalidData) }
 
-        let a = twosComp(Int(data[0]), length: 8)
-        let b = twosComp(Int(data[1]), length: 8)
+        let combined = UInt16(bytes[0]) << 8 | UInt16(bytes[1])
+        let signed = Int16(bitPattern: combined)
+        let kPa = Double(signed) / 4.0
 
-        let valueKPa = ((Double(a) * 256.0) + Double(b)) / 4.0
-
+        let result: MeasurementResult
         if unit == .imperial {
-            let psi = valueKPa * 0.145038
-            return .success(
-                .measurementResult(
-                    MeasurementResult(value: psi,
-                                      unit: UnitPressure.poundsForcePerSquareInch)
-                )
-            )
+            result = MeasurementResult(value: kPa * 0.145038, unit: UnitPressure.poundsForcePerSquareInch)
         } else {
-            return .success(
-                .measurementResult(
-                    MeasurementResult(value: valueKPa,
-                                      unit: UnitPressure.kilopascals)
-                )
-            )
+            result = MeasurementResult(value: kPa, unit: UnitPressure.kilopascals)
         }
+        return .success(.measurementResult(result))
     }
 }
+
+
+
 
 struct SensorVoltageBigDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<
