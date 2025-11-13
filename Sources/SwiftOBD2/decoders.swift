@@ -133,34 +133,31 @@ class UAS {
 
         // Convert to imperial if needed
         if unit_ == .imperial {
-            scaledValue = convertToImperial(scaledValue, unitType: self.unit)
+            return  convertToImperial(scaledValue, unitType: self.unit)
         }
-
-        return MeasurementResult(value: scaledValue, unit: unit)
+        else {
+            return MeasurementResult(value: scaledValue, unit: unit)
+        }
+       
     }
 
 
-    private func convertToImperial(_ value: Double, unitType: Unit) -> Double {
+    private func convertToImperial(_ value: Double, unitType: Unit) -> MeasurementResult {
         switch unitType {
         case UnitTemperature.celsius:
-            self.unit = UnitTemperature.fahrenheit
-            return (value * 1.8) + 32  // Convert Celsius to Fahrenheit
+            return MeasurementResult(value: (value * 1.8) + 32 , unit: UnitTemperature.fahrenheit) // Convert Celsius to Fahrenheit
         case UnitLength.kilometers:
-            self.unit = UnitLength.miles
-            return value * 0.621371  // Convert km to miles
+            return MeasurementResult(value: value * 0.621371 , unit: UnitLength.miles) // Convert km to miles
         case UnitSpeed.kilometersPerHour:
-            self.unit = UnitSpeed.milesPerHour
-            return value * 0.621371  // Convert km/h to mph
+            return MeasurementResult(value:  value * 0.621371 , unit: UnitSpeed.milesPerHour)
         case UnitPressure.kilopascals:
-            self.unit = UnitPressure.poundsForcePerSquareInch
-            return value * 0.145038  // Convert kPa to psi
+            return MeasurementResult(value:  value * 0.145038 , unit: UnitPressure.poundsForcePerSquareInch)
         case .gramsPerSecond:
-            return value * 0.00220462  // Convert grams/sec to pounds/sec
+            return MeasurementResult(value: value * 0.00220462 , unit: self.unit) // Convert grams/sec to pounds/sec
         case .bar:
-            self.unit = UnitPressure.poundsForcePerSquareInch
-            return value * 14.5038  // Convert bar to psi
-        default:
-            return value  // Other units remain unchanged
+            return MeasurementResult(value:  value * 14.5038 , unit: UnitPressure.poundsForcePerSquareInch)
+         default:
+            return MeasurementResult(value : value, unit: self.unit) // Other units remain unchanged
         }
     }
 }
