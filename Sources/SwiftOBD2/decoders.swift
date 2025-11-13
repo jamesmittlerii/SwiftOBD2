@@ -530,12 +530,23 @@ struct AbsEvapPressureDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<
         DecodeResult, DecodeError
     > {
-        let value = Double(bytesToInt(data)) / 200
-        return .success(
-            (.measurementResult(
-                MeasurementResult(value: value, unit: UnitPressure.kilopascals)
-            ))
-        )
+        let valueKPa = Double(bytesToInt(data)) / 200
+        if unit == .imperial {
+            let valuePsi = valueKPa * 0.145038
+            return .success(
+                .measurementResult(
+                    MeasurementResult(value: valuePsi,
+                                      unit: UnitPressure.poundsForcePerSquareInch)
+                )
+            )
+        } else {
+            return .success(
+                .measurementResult(
+                    MeasurementResult(value: valueKPa,
+                                      unit: UnitPressure.kilopascals)
+                )
+            )
+        }
     }
 }
 
@@ -608,14 +619,24 @@ struct GMEngineOilPressureDecoder: Decoder {
         let pressureKPa = (Double(a) * 0.578) * 6.8947
 
         // Clamp to non-negative range
-        let clamped = max(0.0, pressureKPa)
+        let clampedKPa = max(0.0, pressureKPa)
 
-        return .success(
-            .measurementResult(
-                MeasurementResult(value: clamped,
-                                  unit: UnitPressure.kilopascals)
+        if unit == .imperial {
+            let psi = clampedKPa * 0.145038
+            return .success(
+                .measurementResult(
+                    MeasurementResult(value: psi,
+                                      unit: UnitPressure.poundsForcePerSquareInch)
+                )
             )
-        )
+        } else {
+            return .success(
+                .measurementResult(
+                    MeasurementResult(value: clampedKPa,
+                                      unit: UnitPressure.kilopascals)
+                )
+            )
+        }
     }
 }
 
@@ -638,14 +659,24 @@ struct GMACPressureDecoder: Decoder {
         let pressureKPa = ((Double(a) * 1.83) - 14.7) * 6.8947
 
         // Guard against unrealistic negatives
-        let clamped = max(0.0, pressureKPa)
+        let clampedKPa = max(0.0, pressureKPa)
 
-        return .success(
-            .measurementResult(
-                MeasurementResult(value: clamped,
-                                  unit: UnitPressure.kilopascals)
+        if unit == .imperial {
+            let psi = clampedKPa * 0.145038
+            return .success(
+                .measurementResult(
+                    MeasurementResult(value: psi,
+                                      unit: UnitPressure.poundsForcePerSquareInch)
+                )
             )
-        )
+        } else {
+            return .success(
+                .measurementResult(
+                    MeasurementResult(value: clampedKPa,
+                                      unit: UnitPressure.kilopascals)
+                )
+            )
+        }
     }
 }
 
@@ -662,12 +693,24 @@ struct EvapPressureDecoder: Decoder {
         let a = twosComp(Int(data[0]), length: 8)
         let b = twosComp(Int(data[1]), length: 8)
 
-        let value = ((Double(a) * 256.0) + Double(b)) / 4.0
-        return .success(
-            (.measurementResult(
-                MeasurementResult(value: value, unit: UnitPressure.kilopascals)
-            ))
-        )
+        let valueKPa = ((Double(a) * 256.0) + Double(b)) / 4.0
+
+        if unit == .imperial {
+            let psi = valueKPa * 0.145038
+            return .success(
+                .measurementResult(
+                    MeasurementResult(value: psi,
+                                      unit: UnitPressure.poundsForcePerSquareInch)
+                )
+            )
+        } else {
+            return .success(
+                .measurementResult(
+                    MeasurementResult(value: valueKPa,
+                                      unit: UnitPressure.kilopascals)
+                )
+            )
+        }
     }
 }
 
@@ -776,15 +819,25 @@ struct PressureDecoder: Decoder {
     func decode(data: Data, unit: MeasurementUnit) -> Result<
         DecodeResult, DecodeError
     > {
-        let value = data.first ?? 0
-        return .success(
-            .measurementResult(
-                MeasurementResult(
-                    value: Double(value),
-                    unit: UnitPressure.kilopascals
+        let valueKPa = Double(data.first ?? 0)
+        if unit == .imperial {
+            let psi = valueKPa * 0.145038
+            return .success(
+                .measurementResult(
+                    MeasurementResult(value: psi,
+                                      unit: UnitPressure.poundsForcePerSquareInch)
                 )
             )
-        )
+        } else {
+            return .success(
+                .measurementResult(
+                    MeasurementResult(
+                        value: valueKPa,
+                        unit: UnitPressure.kilopascals
+                    )
+                )
+            )
+        }
     }
 }
 
