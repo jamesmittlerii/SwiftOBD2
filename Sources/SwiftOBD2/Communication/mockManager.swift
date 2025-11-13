@@ -740,7 +740,7 @@ private extension MOCKComm {
                 let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.25 + 0.5 * sin(sessionElapsed() * 0.22))) * 255.0).rounded()))
                 return "4C " + String(format: "%02X 00", pct)
             case .runTimeMIL:
-                
+                // Time with MIL on; simulate as 0 in mock
                 return "4D 00 00"
             case .timeSinceDTCCleared:
                 let seconds = Int(sessionElapsed().rounded())
@@ -816,16 +816,24 @@ private extension MOCKComm {
                 let rawA = UInt8(max(0, min(255, Int((clamped + 40.0).rounded()))))
                 return "5C " + String(format: "%02X", rawA)
             case .fuelInjectionTiming:
+                // Simulate fuel injection timing advance based on RPM and load
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
                 let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
                 let load = rpmN
-                var deg = 5.0 + 10.0 * (1.0 - load) - 6.0 * rpmN + smoothNoise(seed: 12, scale: 1.0)
-                deg = max(-20.0, min(25.0, deg))
-                let raw = Int(((deg + 210.0) * 10.0).rounded())
+
+                // Base timing curve: retarded at high load, advanced at cruise
+                var deg = 5.0 + 15.0 * (1.0 - load) - 2.5 * rpmN
+                deg += smoothNoise(seed: 12, scale: 0.8) // small random variation
+                deg = max(-5.0, min(25.0, deg))          // realistic range (BTDC)
+
+                // Encode per SAE J1979: raw = (deg * 10) + 21000
+                let raw = Int((deg * 10.0) + 21000.0)
                 let A = (raw >> 8) & 0xFF
                 let B = raw & 0xFF
+
                 return "5D " + String(format: "%02X %02X", A, B)
+
             case .fuelRate:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
