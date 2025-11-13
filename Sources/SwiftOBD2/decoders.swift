@@ -106,61 +106,64 @@ class UAS {
     }
 
     func decode(bytes: Data, _ unit_: MeasurementUnit = .metric) -> MeasurementResult {
-        guard !bytes.isEmpty else {
-            return MeasurementResult(value: 0, unit: unit)
-        }
-
-        // Combine bytes into integer
-        let bitWidth = bytes.count * 8
-        var intValue: Int = 0
-
-        // Combine as big-endian (OBD-II standard)
-        for byte in bytes {
-            intValue = (intValue << 8) | Int(byte)
-        }
-
-        // Interpret signed if needed
-        if signed {
-            // Convert to signed value safely using bit masking
-            let signBit = 1 << (bitWidth - 1)
-            if (intValue & signBit) != 0 {
-                intValue -= 1 << bitWidth
+            guard !bytes.isEmpty else {
+                return MeasurementResult(value: 0, unit: unit)
             }
-        }
 
-        // Apply scaling and offset
-        var scaledValue = Double(intValue) * scale + offset
+            // Combine bytes into integer
+            let bitWidth = bytes.count * 8
+            var intValue: Int = 0
 
-        // Convert to imperial if needed
-        if unit_ == .imperial {
-            return  convertToImperial(scaledValue, unitType: self.unit)
-        }
-        else {
+            // Combine as big-endian (OBD-II standard)
+            for byte in bytes {
+                intValue = (intValue << 8) | Int(byte)
+            }
+
+            // Interpret signed if needed
+            if signed {
+                // Convert to signed value safely using bit masking
+                let signBit = 1 << (bitWidth - 1)
+                if (intValue & signBit) != 0 {
+                    intValue -= 1 << bitWidth
+                }
+            }
+
+            // Apply scaling and offset
+            var scaledValue = Double(intValue) * scale + offset
+
+            // Convert to imperial if needed
+            if unit_ == .imperial {
+                scaledValue = convertToImperial(scaledValue, unitType: self.unit)
+            }
+
             return MeasurementResult(value: scaledValue, unit: unit)
         }
-       
-    }
 
 
-    private func convertToImperial(_ value: Double, unitType: Unit) -> MeasurementResult {
-        switch unitType {
-        case UnitTemperature.celsius:
-            return MeasurementResult(value: (value * 1.8) + 32 , unit: UnitTemperature.fahrenheit) // Convert Celsius to Fahrenheit
-        case UnitLength.kilometers:
-            return MeasurementResult(value: value * 0.621371 , unit: UnitLength.miles) // Convert km to miles
-        case UnitSpeed.kilometersPerHour:
-            return MeasurementResult(value:  value * 0.621371 , unit: UnitSpeed.milesPerHour)
-        case UnitPressure.kilopascals:
-            return MeasurementResult(value:  value * 0.145038 , unit: UnitPressure.poundsForcePerSquareInch)
-        case .gramsPerSecond:
-            return MeasurementResult(value: value * 0.00220462 , unit: self.unit) // Convert grams/sec to pounds/sec
-        case .bar:
-            return MeasurementResult(value:  value * 14.5038 , unit: UnitPressure.poundsForcePerSquareInch)
-         default:
-            return MeasurementResult(value : value, unit: self.unit) // Other units remain unchanged
+        private func convertToImperial(_ value: Double, unitType: Unit) -> Double {
+            switch unitType {
+            case UnitTemperature.celsius:
+                self.unit = UnitTemperature.fahrenheit
+                return (value * 1.8) + 32  // Convert Celsius to Fahrenheit
+            case UnitLength.kilometers:
+                self.unit = UnitLength.miles
+                return value * 0.621371  // Convert km to miles
+            case UnitSpeed.kilometersPerHour:
+                self.unit = UnitSpeed.milesPerHour
+                return value * 0.621371  // Convert km/h to mph
+            case UnitPressure.kilopascals:
+                self.unit = UnitPressure.poundsForcePerSquareInch
+                return value * 0.145038  // Convert kPa to psi
+            case .gramsPerSecond:
+                return value * 0.00220462  // Convert grams/sec to pounds/sec
+            case .bar:
+                self.unit = UnitPressure.poundsForcePerSquareInch
+                return value * 14.5038  // Convert bar to psi
+            default:
+                return value  // Other units remain unchanged
+            }
         }
     }
-}
 
 func twosComp(_ value: Int, length: Int) -> Int {
     let mask = (1 << length) - 1
