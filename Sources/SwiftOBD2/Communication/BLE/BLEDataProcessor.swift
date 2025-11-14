@@ -49,13 +49,15 @@ class BLEMessageProcessor {
            return
        }
 
+        completion(lines,nil)
+        /*
        if let firstLine = lines.first, firstLine.uppercased().contains("NO DATA") {
            completion(nil, BLEManagerError.noData)
        } else if lines.isEmpty {
            completion(nil, BLEManagerError.noData)
        } else {
            completion(lines, nil)
-       }
+       }*/
    }
 
 
