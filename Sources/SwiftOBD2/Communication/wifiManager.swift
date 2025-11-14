@@ -47,86 +47,66 @@ class WifiManager: CommProtocol {
     
     func connectAsync(timeout totalTimeout: TimeInterval,peripheral _: CBPeripheral? = nil) async throws {
         let tcpOptions = NWProtocolTCP.Options()
+        // Set a reasonable individual handshake timeout (e.g., half the total timeout)
         tcpOptions.connectionTimeout = Int(totalTimeout / 2)
         
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
+               
         tcp = NWConnection(host: host, port: port, using: parameters)
 
+        // Use a task group or a manual timer to manage the total timeout
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             var timeoutWorkItem: DispatchWorkItem?
-            var didResume = false
 
-            func resumeOnce(_ resume: () -> Void) {
-                // Ensure only the first path resumes the continuation
-                guard !didResume else { return }
-                didResume = true
-                // Prevent further callbacks from firing
-                timeoutWorkItem?.cancel()
-                timeoutWorkItem = nil
-                // Detach handler to avoid more state callbacks trying to resume
-                tcp?.stateUpdateHandler = nil
-                resume()
-            }
-
-            // Manual timeout
-            timeoutWorkItem = DispatchWorkItem { [weak self] in
+            // Define a function to handle the timeout cancellation
+            let cancelOnTimeout = { [weak self] in
                 guard let self = self else { return }
                 if self.connectionState != .connectedToAdapter {
                     obdError("Total connection timeout exceeded. Cancelling connection.", category: .wifi)
                     self.connectionState = .disconnected
-                    // Cancel triggers NWConnection to emit .cancelled/.failed; our resumeOnce prevents double resume
                     self.tcp?.cancel()
-                    resumeOnce {
-                        continuation.resume(throwing: CommunicationError.connectionTimedOut)
-                    }
+                    // Resume with a timeout error if the continuation hasn't already resumed
+                    continuation.resume(throwing: CommunicationError.connectionTimedOut)
                 }
             }
-            if let timeoutWorkItem {
-                DispatchQueue.main.asyncAfter(deadline: .now() + totalTimeout, execute: timeoutWorkItem)
-            }
+            
+            // Schedule the manual timeout
+            timeoutWorkItem = DispatchWorkItem(block: cancelOnTimeout)
+            DispatchQueue.main.asyncAfter(deadline: .now() + totalTimeout, execute: timeoutWorkItem!)
             
             tcp?.stateUpdateHandler = { [weak self] newState in
                 guard let self = self else { return }
                 switch newState {
                 case .ready:
+                    // If successful, cancel the pending timeout work item
+                    timeoutWorkItem?.cancel()
                     obdInfo("Connected to \(self.host.debugDescription):\(self.port.debugDescription)", category: .wifi)
                     self.connectionState = .connectedToAdapter
-                    resumeOnce {
-                        continuation.resume(returning: ())
-                    }
+                    continuation.resume(returning: ())
                     
                 case let .failed(error):
+                    // If failed, cancel the pending timeout work item
+                    timeoutWorkItem?.cancel()
                     obdError("Connection failed: \(error.localizedDescription)",category: .wifi)
-                    self.connectionState = .disconnected
-                    resumeOnce {
+                    let previousState = self.connectionState
+                    if self.connectionState == .disconnected {
                         continuation.resume(throwing: CommunicationError.errorOccurred(error))
                     }
-
-                case let .waiting(error):
-                    obdWarning("Connection waiting: \(error.localizedDescription)", category: .wifi)
-
-                case .cancelled:
-                    // Treat cancelled as a failure unless already resumed
-                    obdWarning("Connection cancelled", category: .wifi)
-                    self.connectionState = .disconnected
-                    resumeOnce {
-                        continuation.resume(throwing: CommunicationError.errorOccurred(NWError.posix(.ECANCELED)))
+                    else {
+                        self.connectionState = .disconnected
                     }
-
+                   
+                    
+                case let .waiting(error):
+                    // This is the state where you are seeing the ETIMEDOUT message
+                    obdWarning("Connection waiting: \(error.localizedDescription)", category: .wifi)
+                    
                 default:
                     break
                 }
             }
             tcp?.start(queue: .main)
         }
-    }
-
-    func sendCommandOld(_ command: String, retries: Int) async throws -> [String] {
-        guard let data = "\(command)\r".data(using: .ascii) else {
-            throw CommunicationError.invalidData
-        }
-        obdDebug("Sending: \(command)", category: .wifi)
-        return try await sendCommandInternal(data: data, retries: retries)
     }
 
     private func sendCommandInternal(data: Data, retries: Int) async throws -> [String] {
@@ -137,7 +117,7 @@ class WifiManager: CommProtocol {
                     return lines
                 } else if attempt < retries {
                     obdInfo("No data received, retrying attempt \(attempt + 1) of \(retries)...", category: .wifi)
-                    try await Task.sleep(nanoseconds: 100_000_000)
+                    try await Task.sleep(nanoseconds: 100_000_000) // 0.5 seconds delay
                 }
             } catch {
                 if attempt == retries {
@@ -155,6 +135,7 @@ class WifiManager: CommProtocol {
         }
 
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            
             // Step 1: Send the command
             tcpConnection.send(content: data, completion: .contentProcessed { error in
                 if let error = error {
@@ -178,17 +159,22 @@ class WifiManager: CommProtocol {
                         
                         buffer.append(chunk)
                         
+                        // Try to decode into UTF-8
                         let text = String(data: buffer, encoding: .utf8) ?? ""
                         
+                        // ✅ ELM327 is done
                         if text.contains(">") {
+                            //let cleaned = text.replacingOccurrences(of: ">", with: "")
                             obdDebug("received: \(text)", category: .wifi)
                             continuation.resume(returning: text)
                             return
                         }
                         
+                        // ✅ Continue receiving until prompt arrives
                         if !isComplete {
                             receiveLoop()
                         } else {
+                            // No prompt AND stream ended? -> Error
                             continuation.resume(throwing: CommunicationError.invalidData)
                         }
                     }
@@ -228,6 +214,7 @@ class WifiManager: CommProtocol {
     func sendCommand(_ command: String, retries: Int) async throws -> [String] {
         guard let tcp else { throw ELM327Error.noConnection }
 
+        // Ensure connection is ready
         guard tcp.state == .ready else {
             throw ELM327Error.connectionNotReady
         }
@@ -255,7 +242,8 @@ class WifiManager: CommProtocol {
             } catch {
                 lastError = error
                 if attempts > retries { break }
-                try? await Task.sleep(nanoseconds: 150_000_000)
+                // Give adapter a moment before retrying
+                try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
             }
         }
 
@@ -274,16 +262,20 @@ class WifiManager: CommProtocol {
         }
     }
 
+    /// Reads until the ELM327 sends the prompt '>'
     private func receiveUntilPrompt(over connection: NWConnection) async throws -> String {
         var fullBuffer = Data()
         let timeoutNanos: UInt64 = 2_500_000_000 // 2.5 seconds
 
         return try await withThrowingTaskGroup(of: String.self) { group in
+
+            // Timeout task
             group.addTask {
                 try await Task.sleep(nanoseconds: timeoutNanos)
                 throw ELM327Error.timeout
             }
 
+            // Reader task
             group.addTask { [weak self] in
                 guard let self = self else { throw ELM327Error.noConnection }
                 while true {
@@ -297,6 +289,7 @@ class WifiManager: CommProtocol {
                 }
             }
 
+            // First task to finish wins
             let result = try await group.next()!
             group.cancelAll()
             return result
@@ -317,6 +310,7 @@ class WifiManager: CommProtocol {
         }
     }
 
+    /// Cleans up ELM327 output → strips whitespace, prompt, echoes, empty lines
     private func cleanELMResponse(_ raw: String) -> [String] {
         raw
             .replacingOccurrences(of: ">", with: "")
