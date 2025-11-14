@@ -57,7 +57,53 @@ class WifiManager: CommProtocol {
         // Use a task group or a manual timer to manage the total timeout
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             var timeoutWorkItem: DispatchWorkItem?
-
+            var didResume = false
+            
+            func completeSuccess() {
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume()
+            }
+            
+            func completeWithError(_ error: Error) {
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume(throwing: error)
+            }
+            
+            func publishDisconnected() {
+                if self.connectionState != .disconnected {
+                    self.connectionState = .disconnected
+                    DispatchQueue.main.async {
+                        self.obdDelegate?.connectionStateChanged(state: .disconnected)
+                    }
+                }
+            }
+            
+            func handleTerminalFailure(_ error: NWError) {
+                timeoutWorkItem?.cancel()
+                obdError("Connection failed: \(error.localizedDescription)", category: .wifi)
+                self.tcp?.cancel()
+                publishDisconnected()
+                completeWithError(CommunicationError.errorOccurred(error))
+            }
+            
+            func isTerminalWaitingError(_ error: NWError) -> Bool {
+                switch error {
+                case .posix(let code):
+                    // Treat connection refused/unreachable as terminal for your tool
+                    return code == .ECONNREFUSED || code == .ENETUNREACH || code == .EHOSTUNREACH
+                case .dns:
+                    // DNS failures often won’t resolve without user action; treat as terminal
+                    return true
+                case .tls:
+                    // TLS handshake errors are terminal for this connection
+                    return true
+                default:
+                    return false
+                }
+            }
+            
             // Define a function to handle the timeout cancellation
             let cancelOnTimeout = { [weak self] in
                 guard let self = self else { return }
@@ -65,8 +111,7 @@ class WifiManager: CommProtocol {
                     obdError("Total connection timeout exceeded. Cancelling connection.", category: .wifi)
                     self.connectionState = .disconnected
                     self.tcp?.cancel()
-                    // Resume with a timeout error if the continuation hasn't already resumed
-                    continuation.resume(throwing: CommunicationError.connectionTimedOut)
+                    completeWithError(CommunicationError.connectionTimedOut)
                 }
             }
             
@@ -82,24 +127,25 @@ class WifiManager: CommProtocol {
                     timeoutWorkItem?.cancel()
                     obdInfo("Connected to \(self.host.debugDescription):\(self.port.debugDescription)", category: .wifi)
                     self.connectionState = .connectedToAdapter
-                    continuation.resume(returning: ())
+                    completeSuccess()
                     
                 case let .failed(error):
-                    // If failed, cancel the pending timeout work item
-                    timeoutWorkItem?.cancel()
-                    obdError("Connection failed: \(error.localizedDescription)",category: .wifi)
-                    let previousState = self.connectionState
-                    if self.connectionState == .disconnected {
-                        continuation.resume(throwing: CommunicationError.errorOccurred(error))
-                    }
-                    else {
-                        self.connectionState = .disconnected
-                    }
-                   
+                    handleTerminalFailure(error)
                     
                 case let .waiting(error):
-                    // This is the state where you are seeing the ETIMEDOUT message
+                    // This can be transient, but ECONNREFUSED is usually permanent for now
                     obdWarning("Connection waiting: \(error.localizedDescription)", category: .wifi)
+                    if isTerminalWaitingError(error) {
+                        handleTerminalFailure(error)
+                    } else {
+                        // Keep waiting; optionally reflect as “connecting”
+                        if self.connectionState != .connecting {
+                            self.connectionState = .connecting
+                            DispatchQueue.main.async {
+                                self.obdDelegate?.connectionStateChanged(state: .connecting)
+                            }
+                        }
+                    }
                     
                 default:
                     break
