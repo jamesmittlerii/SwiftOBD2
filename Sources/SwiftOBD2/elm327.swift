@@ -107,10 +107,7 @@ class ELM327 {
             .sink { [weak self] state in
                 self?.connectionState = state
                 self?.obdDelegate?.connectionStateChanged(state: state)
-                obdDebug(
-                    "Connection state updated: \(state.hashValue)",
-                    category: .connection
-                )
+                
             }
             .store(in: &cancellables)
     }
