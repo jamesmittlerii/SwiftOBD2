@@ -252,6 +252,17 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
                     .eraseToAnyPublisher()
             }
 
+        // A termination signal that fires when the connection drops or errors
+        let disconnectSignal = self.$connectionState
+            .filter { state in
+                switch state {
+                case .disconnected, .error: return true
+                default: return false
+                }
+            }
+            .map { _ in () }
+            .setFailureType(to: Error.self)
+
         return timerStream
             .flatMap { [weak self] _ -> Future<[OBDCommand: DecodeResult], Error> in
                 Future { promise in
@@ -273,7 +284,6 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
                         for pid in pids {
                             do {
                                let singleResult = try await self.requestPID(pid, unit: unit)
-                               // let singleResult = try await self.requestPIDs([pid], unit: unit)
                                 for (command, value) in singleResult {
                                     aggregatedResults[command] = value
                                 }
@@ -304,6 +314,8 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
                     }
                 }
             }
+            // Complete the stream when we see a disconnect or error
+            .prefix(untilOutputFrom: disconnectSignal)
             .eraseToAnyPublisher()
     }
 
@@ -348,7 +360,6 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         
         
         let response = try await sendCommandInternal(command.properties.command, retries: 1)
-        // JEM let response = try await sendCommandInternal("01" + command.properties.command.dropFirst(2), retries: 1)
 
         guard let responseData = try elm327.canProtocol?.parse(response).first?.data else { return [:] }
 
@@ -367,15 +378,6 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         let pidHex = String(command.properties.command.suffix(2))
         let requestedPid = UInt8(pidHex, radix: 16) ?? 0x00
         let firstPayloadByte = responseData.first ?? 0x00
-
-        /* JEM
-        if firstPayloadByte != requestedPid {
-            obdWarning(
-                "PID echo mismatch. Expected PID 0x\(String(format: "%02X", requestedPid)), got 0x\(String(format: "%02X", firstPayloadByte))",
-                category: .parsing
-            )
-            throw OBDServiceError.pidMismatch(expected: requestedPid, actual: firstPayloadByte)
-        } */
 
         var batchedResponse = BatchedResponse(response: responseData, unit)
 
