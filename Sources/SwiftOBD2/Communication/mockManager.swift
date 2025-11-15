@@ -189,28 +189,69 @@ class MOCKComm: CommProtocol {
             return response
 
         } else if command == "03" {
-            // 03 is a request for DTCs
-            let dtcs = ["P0104", "U0207"]
-            var response = ""
+            
+            // Mixed-severity sample codes
+            let dtcs = [
+                "P0302", // high severity
+                "P0420", // medium
+                "P0128" // medium
+        
+            ]
+
+            // Encode DTCs to J1979 bytes
+            func encodeDTC(_ dtc: String) -> [UInt8] {
+                let letters: [Character: UInt8] = [
+                    "P": 0x0,
+                    "C": 0x1,
+                    "B": 0x2,
+                    "U": 0x3
+                ]
+
+                let systemNibble = letters[dtc.first!] ?? 0
+                let digits = dtc.dropFirst()
+
+                let d1 = UInt8(String(digits.prefix(1)), radix: 16)!
+                let d2 = UInt8(String(digits.dropFirst().prefix(1)), radix: 16)!
+                let d3 = UInt8(String(digits.dropFirst(2)), radix: 16)!
+
+                // Byte A = system + d1 + d2
+                let A = (systemNibble << 6) | (d1 << 4) | d2
+                let B = d3
+                return [A, B]
+            }
+
+            // Build full data payload
+            var payload: [UInt8] = []
+            payload.append(0x43)                // Mode 03 response
+            payload.append(UInt8(dtcs.count))   // Count
+
             for dtc in dtcs {
-                var hexString = String(dtc.suffix(4))
-                hexString = hexString.chunked(by: 2).joined(separator: " ")
-                response +=  hexString
-                obdDebug("Generated DTC hex: \(hexString)", category: .communication)
+                let codeBytes = encodeDTC(dtc)
+                payload.append(contentsOf: codeBytes)
+                obdDebug("Encoded \(dtc): \(String(format: "%02X %02X", codeBytes[0], codeBytes[1]))",
+                         category: .communication)
             }
-            var header = ""
-            if ecuSettings.headerOn {
-                header = "7E8"
-            }
-            let mode = "43"
-            response = mode + " " + response
-            let length = String(format: "%02X", response.count / 3 + 1)
-            response = header + " " + length + " " + response
-            while response.count < 26 {
-                response.append(" 00")
-            }
-            return [response]
-        } else {
+
+            // Total payload = 14 bytes → must be multi-frame
+
+            // ---- FRAME 1: First Frame ----
+            // PCI: 10 LL   (LL = total payload)
+            let totalLen = UInt8(payload.count)
+            let frame1Bytes = [0x10, totalLen] + Array(payload.prefix(6))
+            var frame1 = "7E8 " + frame1Bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+
+            // ---- FRAME 2: Consecutive Frame #1 ----
+            let frame2Bytes = [0x21] + Array(payload.dropFirst(6).prefix(7))
+            var frame2 = "7E8 " + frame2Bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+
+            // ---- FRAME 3: Consecutive Frame #2 ----
+            var remaining = Array(payload.dropFirst(6 + 7))
+            while remaining.count < 7 { remaining.append(0x00) } // pad to 7
+            let frame3Bytes = [0x22] + remaining
+            var frame3 = "7E8 " + frame3Bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+
+            return [frame1, frame2, frame3]
+        }else {
             guard var response = makeRawMockResponse(for: command) else {
                 return ["No Data"]
             }

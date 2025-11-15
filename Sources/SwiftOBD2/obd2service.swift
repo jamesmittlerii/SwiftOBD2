@@ -357,7 +357,11 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     /// - Returns: measurement result
     /// - Throws: Errors that might occur during the request process.
     public func requestPID(_ command: OBDCommand, unit: MeasurementUnit) async throws -> [OBDCommand: DecodeResult] {
-        
+        // Special-case Mode 3: return ECU-keyed DTCs via the new DecodeResult case
+        if case .mode3(.GET_DTC) = command {
+            let dtcsByECU = try await elm327.scanForTroubleCodes()
+            return [command: .troubleCodesByECU(dtcsByECU)]
+        }
         
         let response = try await sendCommandInternal(command.properties.command, retries: 1)
 
@@ -539,3 +543,4 @@ public struct VINInfo: Codable, Hashable {
     public let ModelYear: String
     public let EngineCylinders: String
 }
+
