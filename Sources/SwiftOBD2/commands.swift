@@ -37,6 +37,12 @@ public extension DecodeResult {
         return nil
     }
 
+    var troubleCodesByECU: [ECUID: [TroubleCodeMetadata]]? {
+        if case let .troubleCodesByECU(res) = self { return res as [ECUID: [TroubleCodeMetadata]] }
+        return nil
+    }
+
+    
     var measurementMonitor: Monitor? {
         if case let .measurementMonitor(res) = self { return res as Monitor }
         return nil

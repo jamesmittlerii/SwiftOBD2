@@ -232,7 +232,6 @@ public enum DecodeResult {
     case measurementResult(MeasurementResult)
     case troubleCode([TroubleCodeMetadata])
     case measurementMonitor(Monitor)
-    // New: carry ECU-keyed DTCs when requested through higher-level APIs
     case troubleCodesByECU([ECUID: [TroubleCodeMetadata]])
 }
 
@@ -987,4 +986,3 @@ let TestIds: [UInt8: (String, String)] = [
     0x0B: ("MisFireAverage", "The average number of misfires per 1000 revolutions"),
     0x0C: ("MisFireCount", "The number of misfires since the last reset"),
 ]
-
