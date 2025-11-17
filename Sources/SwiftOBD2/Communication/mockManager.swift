@@ -194,7 +194,13 @@ class MOCKComm: CommProtocol {
             let dtcs = [
                 "P0302", // high severity
                 "P0420", // medium
-                "P0128" // medium
+                "P0128" ,// medium,
+                
+                    "P0300",
+                    "P0170",
+                    "P0411",
+                    "P0420"
+                    
         
             ]
 
@@ -389,7 +395,58 @@ private extension MOCKComm {
             case .pidsA:
                 return "00 FF FF FF FF 00"
             case .status:
-                return "01 00 07 E5 00"
+                // Progressive readiness over 2 minutes with all monitors supported (spark engine)
+                let t = min(max(sessionElapsed(), 0.0), 120.0)
+                let stages = Int(t / 12.0) // 10 stages (0...10)
+
+                // Byte0: MIL on + 7 DTCs
+                let A0: UInt8 = 0x80 | 0x07 // 0x87
+
+                // Base monitors in A (bit set = NOT ready). Start all not ready.
+                // bit6 = Comprehensive, bit5 = Fuel System, bit4 = Misfire
+                var A: UInt8 = 0
+                A |= 0x40 // Comprehensive not ready
+                A |= 0x20 // Fuel System not ready
+                A |= 0x10 // Misfire not ready
+
+                // Extended monitors support (B): set all as supported
+                // bit0 Catalyst, bit1 Heated Catalyst, bit2 Evap, bit3 Secondary Air,
+                // bit5 O2 Sensor, bit6 O2 Heater, bit7 EGR/VVT
+                var B: UInt8 = 0
+                B |= 0x01 // Catalyst
+                B |= 0x02 // Heated Catalyst
+                B |= 0x04 // Evaporative System
+                B |= 0x08 // Secondary Air
+                B |= 0x20 // O2 Sensor
+                B |= 0x40 // O2 Heater
+                B |= 0x80 // EGR/VVT
+
+                // Readiness C (1 = NOT ready, 0 = ready). Start all not ready for supported monitors.
+                var C: UInt8 = 0
+                C |= 0x01 // Catalyst not ready
+                C |= 0x02 // Heated Catalyst not ready
+                C |= 0x04 // Evap not ready
+                C |= 0x08 // Secondary Air not ready
+                C |= 0x20 // O2 Sensor not ready
+                C |= 0x40 // O2 Heater not ready
+                C |= 0x80 // EGR/VVT not ready
+
+                // Define readiness order across 10 stages
+                // 1) Comprehensive (A bit6), 2) Fuel (A bit5), 3) Misfire (A bit4),
+                // 4) O2 Heater (C bit6), 5) O2 Sensor (C bit5), 6) Catalyst (C bit0),
+                // 7) Evap (C bit2), 8) EGR (C bit7), 9) Secondary Air (C bit3), 10) Heated Catalyst (C bit1)
+                if stages >= 1 { A &= ~0x40 } // Comprehensive ready
+                if stages >= 2 { A &= ~0x20 } // Fuel ready
+                if stages >= 3 { A &= ~0x10 } // Misfire ready
+                if stages >= 4 { C &= ~0x40 } // O2 Heater ready
+                if stages >= 5 { C &= ~0x20 } // O2 Sensor ready
+                if stages >= 6 { C &= ~0x01 } // Catalyst ready
+                if stages >= 7 { C &= ~0x04 } // Evap ready
+                if stages >= 8 { C &= ~0x80 } // EGR/VVT ready
+                if stages >= 9 { C &= ~0x08 } // Secondary Air ready
+                if stages >= 10 { C &= ~0x02 } // Heated Catalyst ready
+
+                return String(format: "%02X %02X %02X %02X", A0, A, B, C)
             case .freezeDTC:
                 // Return a single stored code (e.g., P0301 => 03 01)
                 return "02 03 01"
@@ -949,4 +1006,3 @@ extension String {
         }
     }
 }
-
