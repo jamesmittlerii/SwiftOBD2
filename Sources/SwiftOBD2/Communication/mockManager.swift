@@ -395,7 +395,7 @@ private extension MOCKComm {
             case .pidsA:
                 return "00 FF FF FF FF 00"
             case .status:
-                // Progressive readiness over 2 minutes with all monitors supported (spark engine)
+                // Progressive readiness over 2 minutes with gasoline monitors only
                 let t = min(max(sessionElapsed(), 0.0), 120.0)
                 let stages = Int(t / 12.0) // 10 stages (0...10)
 
@@ -408,8 +408,9 @@ private extension MOCKComm {
                 A |= 0x40 // Comprehensive not ready
                 A |= 0x20 // Fuel System not ready
                 A |= 0x10 // Misfire not ready
+                // Ensure diesel bit (0x08) is never set for gasoline
 
-                // Extended monitors support (B): set all as supported
+                // Extended monitors support (B): gasoline set
                 // bit0 Catalyst, bit1 Heated Catalyst, bit2 Evap, bit3 Secondary Air,
                 // bit5 O2 Sensor, bit6 O2 Heater, bit7 EGR/VVT
                 var B: UInt8 = 0
@@ -446,7 +447,9 @@ private extension MOCKComm {
                 if stages >= 9 { C &= ~0x08 } // Secondary Air ready
                 if stages >= 10 { C &= ~0x02 } // Heated Catalyst ready
 
-                return String(format: "%02X %02X %02X %02X", A0, A, B, C)
+                let payload = String(format: "01 %02X %02X %02X %02X", A0, A, B, C)
+                obdDebug("Mock 0101 payload (A0 A B C): \(payload)", category: .communication)
+                return payload
             case .freezeDTC:
                 // Return a single stored code (e.g., P0301 => 03 01)
                 return "02 03 01"
@@ -693,17 +696,6 @@ private extension MOCKComm {
             case .fuelRailPressureDirect:
                 
                 return "23 02 BF"
-                /*
-                let speedValue = currentMockSpeed()
-                let rpm = currentMockRPM(fromSpeed: speedValue)
-                let rpmN = max(0.0, min(1.0, (rpm - 800.0) / (8000.0 - 800.0)))
-                let load = rpmN
-                var kPa = 5000.0 + load * 12000.0 + smoothNoise(seed: 10, scale: 200.0)
-                kPa = max(3000.0, min(20000.0, kPa))
-                let raw = Int((kPa / 10.0).rounded())
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                return "23 " + String(format: "%02X %02X", A, B) */
             case .O2Sensor1WRVolatage,
                  .O2Sensor2WRVolatage,
                  .O2Sensor3WRVolatage,
@@ -796,8 +788,49 @@ private extension MOCKComm {
             case .pidsC:
                 return "40 FF FF FF FE 00"
             case .statusDriveCycle:
-                // Similar to 0101 but for this drive cycle
-                return "41 00 07 E5 00"
+                // Mirror gasoline readiness progression for this drive cycle
+                let t = min(max(sessionElapsed(), 0.0), 120.0)
+                let stages = Int(t / 12.0) // 10 stages
+
+                let A0: UInt8 = 0x80 | 0x07 // MIL on + 7 DTCs
+
+                var A: UInt8 = 0
+                A |= 0x40
+                A |= 0x20
+                A |= 0x10
+
+                var B: UInt8 = 0
+                B |= 0x01
+                B |= 0x02
+                B |= 0x04
+                B |= 0x08
+                B |= 0x20
+                B |= 0x40
+                B |= 0x80
+
+                var C: UInt8 = 0
+                C |= 0x01
+                C |= 0x02
+                C |= 0x04
+                C |= 0x08
+                C |= 0x20
+                C |= 0x40
+                C |= 0x80
+
+                if stages >= 1 { A &= ~0x40 }
+                if stages >= 2 { A &= ~0x20 }
+                if stages >= 3 { A &= ~0x10 }
+                if stages >= 4 { C &= ~0x40 }
+                if stages >= 5 { C &= ~0x20 }
+                if stages >= 6 { C &= ~0x01 }
+                if stages >= 7 { C &= ~0x04 }
+                if stages >= 8 { C &= ~0x80 }
+                if stages >= 9 { C &= ~0x08 }
+                if stages >= 10 { C &= ~0x02 }
+
+                let payload = String(format: "41 %02X %02X %02X %02X", A0, A, B, C)
+                obdDebug("Mock 0141 payload (A0 A B C): \(payload)", category: .communication)
+                return payload
             case .controlModuleVoltage:
                 return "42 35 04"
             case .absoluteLoad:
