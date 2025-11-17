@@ -192,12 +192,12 @@ class MOCKComm: CommProtocol {
             
             // Mixed-severity sample codes
             let dtcs = [
-                "P0302", // high severity
-                "P0420", // medium
-                "P0128" ,// medium,
                 
                     "P0300",
                     "P0170",
+                    "P0101",
+                    "P0104",
+                    "P0207",
                     "P0411",
                     "P0420"
                     
