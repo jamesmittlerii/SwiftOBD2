@@ -42,7 +42,7 @@ class MOCKComm: CommProtocol {
     private var sessionState = MockSessionState()
 
     func sendCommand(_ command: String, retries: Int = 3) async throws -> [String] {
-        obdInfo("Sending command: \(command)")
+        //obdInfo("Sending command: \(command)")
         var header = ""
 
         let prefix = String(command.prefix(2))
@@ -234,8 +234,6 @@ class MOCKComm: CommProtocol {
             for dtc in dtcs {
                 let codeBytes = encodeDTC(dtc)
                 payload.append(contentsOf: codeBytes)
-                obdDebug("Encoded \(dtc): \(String(format: "%02X %02X", codeBytes[0], codeBytes[1]))",
-                         category: .communication)
             }
 
             // Total payload = 14 bytes → must be multi-frame
@@ -448,7 +446,6 @@ private extension MOCKComm {
                 if stages >= 10 { C &= ~0x02 } // Heated Catalyst ready
 
                 let payload = String(format: "01 %02X %02X %02X %02X", A0, A, B, C)
-                obdDebug("Mock 0101 payload (A0 A B C): \(payload)", category: .communication)
                 return payload
             case .freezeDTC:
                 // Return a single stored code (e.g., P0301 => 03 01)
@@ -894,7 +891,6 @@ private extension MOCKComm {
                 if stages >= 10 { C &= ~0x02 }
 
                 let payload = String(format: "41 %02X %02X %02X %02X", A0, A, B, C)
-                obdDebug("Mock 0141 payload (A0 A B C): \(payload)", category: .communication)
                 return payload
             case .controlModuleVoltage:
                 return "42 35 04"
