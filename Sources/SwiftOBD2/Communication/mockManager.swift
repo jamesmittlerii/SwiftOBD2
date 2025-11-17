@@ -454,7 +454,72 @@ private extension MOCKComm {
                 // Return a single stored code (e.g., P0301 => 03 01)
                 return "02 03 01"
             case .fuelStatus:
-                return "03 02 04"
+                // Compute fuel status based on coolant temp and throttle demand
+                // Status coding per your FuelStatusDecoder/FUEL_STATUS:
+                // 1 = Open Loop (cold engine)
+                // 2 = Closed Loop (normal operation)
+                // 3 = Open Loop (load/fuel cut)
+                //
+                // We’ll reuse the same internal models you use elsewhere to derive temp and throttle.
+
+                // Coolant temperature model (same as in .coolantTemp)
+                let now = Date()
+                if sessionState.testStart == nil { sessionState.testStart = now }
+                let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
+                let warmupSeconds: TimeInterval = 60.0
+                let clamped = max(0.0, min(warmupSeconds, elapsed))
+                let tempC = (clamped / warmupSeconds) * 100.0
+
+                // Throttle demand model (reuse simplified view of .throttlePos)
+                let speed = currentMockSpeed(now: now)
+                let rpm = currentMockRPM(fromSpeed: speed)
+                let idleRpm: Double = 800.0
+                let redlineRpm: Double = 8000.0
+                let rpmN = max(0.0, min(1.0, (rpm - idleRpm) / (redlineRpm - idleRpm)))
+
+                // Base demand curve plus small noise
+                var demand = 0.15 + 0.45 * pow(rpmN, 2.0)
+                demand += smoothNoise(seed: 5.5, scale: 0.015)
+
+                // Detect coasting/low demand
+                var accel: Double = 0
+                if let last = sessionState.lastTick {
+                    let dt = max(0.001, now.timeIntervalSince(last))
+                    let prevSpeed = currentMockSpeed(now: last)
+                    accel = (speed - prevSpeed) / dt
+                }
+                let isIdle = (rpm < 1100 && speed < 3)
+                if isIdle {
+                    demand = max(demand, 0.06)
+                }
+                let isCoasting = (rpm > 1200 && accel < -4.0) && !isIdle
+                if isCoasting {
+                    demand = min(demand, 0.03 + 0.03 * rpmN)
+                }
+
+                // Convert demand (0…1) to percent
+                let throttlePct = demand * 100.0
+
+                // Thresholds
+                let warmThresholdC = 60.0
+                let lowThrottleThresholdPct = 3.0
+
+                // Decide status code: 1=cold open loop, 3=fuel cut open loop, 2=closed loop
+                let statusCode: UInt8
+                if tempC < warmThresholdC {
+                    statusCode = 1  // Open Loop (cold engine)
+                } else if throttlePct < lowThrottleThresholdPct {
+                    statusCode = 3  // Open Loop (load/fuel cut)
+                } else {
+                    statusCode = 2  // Closed Loop
+                }
+
+                // Encode as two bytes for PID 0103. Your FuelStatusDecoder reads the bitfield,
+                // but commonly returning the code in the low nibble is acceptable for the mock.
+                // We'll place it in byte A and zero byte B.
+                let A = statusCode
+                let B: UInt8 = 0x00
+                return "03 " + String(format: "%02X %02X", A, A)
             case .engineLoad:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
