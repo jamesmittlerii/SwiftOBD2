@@ -107,22 +107,44 @@ public enum OBDCommand: Codable, Hashable, Comparable, Identifiable {
     public init(from decoder: Swift.Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(String.self, forKey: .type)
+        let commandString = try container.decode(String.self, forKey: .command)
 
         switch type {
         case "general":
-            self = .general(try container.decode(General.self, forKey: .command))
+            guard let command = General.from(string: commandString) else {
+                throw DecodingError.dataCorruptedError(forKey: .command, in: container, debugDescription: "Invalid General command: \(commandString)")
+            }
+            self = .general(command)
         case "mode1":
-            self = .mode1(try container.decode(Mode1.self, forKey: .command))
+            guard let command = Mode1.from(string: commandString) else {
+                throw DecodingError.dataCorruptedError(forKey: .command, in: container, debugDescription: "Invalid Mode1 command: \(commandString)")
+            }
+            self = .mode1(command)
         case "mode3":
-            self = .mode3(try container.decode(Mode3.self, forKey: .command))
+            guard let command = Mode3.from(string: commandString) else {
+                throw DecodingError.dataCorruptedError(forKey: .command, in: container, debugDescription: "Invalid Mode3 command: \(commandString)")
+            }
+            self = .mode3(command)
         case "mode6":
-            self = .mode6(try container.decode(Mode6.self, forKey: .command))
+            guard let command = Mode6.from(string: commandString) else {
+                throw DecodingError.dataCorruptedError(forKey: .command, in: container, debugDescription: "Invalid Mode6 command: \(commandString)")
+            }
+            self = .mode6(command)
         case "mode9":
-            self = .mode9(try container.decode(Mode9.self, forKey: .command))
+            guard let command = Mode9.from(string: commandString) else {
+                throw DecodingError.dataCorruptedError(forKey: .command, in: container, debugDescription: "Invalid Mode9 command: \(commandString)")
+            }
+            self = .mode9(command)
         case "GMmode22":
-            self = .GMmode22(try container.decode(GMMode22.self, forKey: .command))
+            guard let command = GMMode22.from(string: commandString) else {
+                throw DecodingError.dataCorruptedError(forKey: .command, in: container, debugDescription: "Invalid GMMode22 command: \(commandString)")
+            }
+            self = .GMmode22(command)
         case "protocols":
-            self = .protocols(try container.decode(Protocols.self, forKey: .command))
+            guard let command = Protocols.from(string: commandString) else {
+                throw DecodingError.dataCorruptedError(forKey: .command, in: container, debugDescription: "Invalid Protocols command: \(commandString)")
+            }
+            self = .protocols(command)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Invalid OBDCommand type: \(type)")
         }
@@ -133,25 +155,25 @@ public enum OBDCommand: Codable, Hashable, Comparable, Identifiable {
         switch self {
         case .general(let command):
             try container.encode("general", forKey: .type)
-            try container.encode(command, forKey: .command)
+            try container.encode(String(describing: command), forKey: .command)
         case .mode1(let command):
             try container.encode("mode1", forKey: .type)
-            try container.encode(command, forKey: .command)
+            try container.encode(String(describing: command), forKey: .command)
         case .mode3(let command):
             try container.encode("mode3", forKey: .type)
-            try container.encode(command, forKey: .command)
+            try container.encode(String(describing: command), forKey: .command)
         case .mode6(let command):
             try container.encode("mode6", forKey: .type)
-            try container.encode(command, forKey: .command)
+            try container.encode(String(describing: command), forKey: .command)
         case .mode9(let command):
             try container.encode("mode9", forKey: .type)
-            try container.encode(command, forKey: .command)
+            try container.encode(String(describing: command), forKey: .command)
         case .GMmode22(let command):
             try container.encode("GMmode22", forKey: .type)
-            try container.encode(command, forKey: .command)
+            try container.encode(String(describing: command), forKey: .command)
         case .protocols(let command):
             try container.encode("protocols", forKey: .type)
-            try container.encode(command, forKey: .command)
+            try container.encode(String(describing: command), forKey: .command)
         }
     }
 
@@ -203,6 +225,10 @@ public enum OBDCommand: Codable, Hashable, Comparable, Identifiable {
             case .ATSP6: return CommandProperties("ATSP6", "Auto protocol", 0, .none)
 
             }
+        }
+        
+        public static func from(string: String) -> Self? {
+            return Self.allCases.first { String(describing: $0) == string }
         }
     }
 
@@ -311,6 +337,10 @@ public enum OBDCommand: Codable, Hashable, Comparable, Identifiable {
             switch self {
             case .GET_DTC: return CommandProperties("03", "Get DTCs", 0, .dtc)
             }
+        }
+        
+        static func from(string: String) -> Self? {
+            return Self.allCases.first { String(describing: $0) == string }
         }
     }
 
@@ -433,6 +463,10 @@ public enum OBDCommand: Codable, Hashable, Comparable, Identifiable {
             case .CVN: return CommandProperties("0906", "Calibration Verification Numbers", 10, .cvn)
             }
         }
+        
+        static func from(string: String) -> Self? {
+            return Self.allCases.first { String(describing: $0) == string }
+        }
     }
 
     static var pidGetters: [OBDCommand] = {
@@ -503,6 +537,10 @@ extension OBDCommand.General {
         case .ATDPN: return CommandProperties("ATDPN", "Describe Protocol Number", 5, .none)
         }
     }
+    
+    static func from(string: String) -> Self? {
+        return Self.allCases.first { String(describing: $0) == string }
+    }
 }
 
 extension OBDCommand.GMMode22
@@ -514,6 +552,10 @@ extension OBDCommand.GMMode22
         case .engineOilPressure: return CommandProperties("221470", "Engine Oil Pressure", 3, .GMoilPressure, true)
         case .ACHighPressure: return CommandProperties("221144", "Air Conditioner High Pressure", 3, .GMACPressure, true)
         }
+    }
+    
+    static func from(string: String) -> Self? {
+        return Self.allCases.first { String(describing: $0) == string }
     }
 }
 
@@ -619,6 +661,10 @@ extension OBDCommand.Mode1 {
 
         }
     }
+    
+    static func from(string: String) -> Self? {
+        return Self.allCases.first { String(describing: $0) == string }
+    }
 }
 
 extension OBDCommand.Mode6 {
@@ -713,6 +759,10 @@ extension OBDCommand.Mode6 {
         case .MONITOR_PM_FILTER_B1: return CommandProperties("06B0", "PM Filter Monitor Bank 1", 0, .monitor)
         case .MONITOR_PM_FILTER_B2: return CommandProperties("06B1", "PM Filter Monitor Bank 2", 0, .monitor)
         }
+    }
+    
+    static func from(string: String) -> Self? {
+        return Self.allCases.first { String(describing: $0) == string }
     }
 }
 
