@@ -752,7 +752,7 @@ struct UASDecoder: Decoder {
 public struct ReadinessMonitor: Codable, Hashable {
     public let name: String
     public let supported: Bool
-    public let ready: Bool?
+    public let ready: Bool
 }
 
 extension Array {
