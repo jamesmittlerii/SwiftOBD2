@@ -753,6 +753,12 @@ public struct ReadinessMonitor: Codable, Hashable {
     public let name: String
     public let supported: Bool
     public let ready: Bool
+    
+    public init(name: String, supported: Bool, ready: Bool) {
+            self.name = name
+            self.supported = supported
+            self.ready = ready
+        }
 }
 
 extension Array {
