@@ -539,6 +539,13 @@
         "causeIndexes": [8, 9, 26],
         "remedyIndexes": [8, 9, 22]
       },
+      
+      "P0196": {
+        "title": "Engine Oil Temperature Sensor Range",
+        "description": "The PCM detects an invalid range for the engine oil temperature sensor.",
+        "causeIndexes": [8, 9, 26],
+        "remedyIndexes": [8, 9, 22]
+      },
 
       "P0197": {
         "title": "Engine Oil Temperature Sensor Low Input",
