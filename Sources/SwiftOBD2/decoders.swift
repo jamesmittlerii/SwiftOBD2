@@ -30,6 +30,12 @@ public struct Status: Codable, Hashable {
     public let milOn: Bool
     public let dtcCount: Int
     public let monitors: [ReadinessMonitor]
+    
+    public init(milOn: Bool, dtcCount: Int, monitors: [ReadinessMonitor]) {
+           self.milOn = milOn
+           self.dtcCount = dtcCount
+           self.monitors = monitors
+       }
 }
 
 public struct StatusTest: Codable, Hashable {
