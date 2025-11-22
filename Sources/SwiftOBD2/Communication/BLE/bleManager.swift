@@ -47,7 +47,7 @@ public enum ConnectionState: Sendable {
 
 // MARK: - Constants
 enum BLEConstants {
-    static let defaultTimeout: TimeInterval = 3.0
+    static let defaultTimeout: TimeInterval = 10.0 // JEM increase this
     static let scanDuration: TimeInterval = 10.0
     static let connectionTimeout: TimeInterval = 10.0
     static let retryDelay: TimeInterval = 0.5
