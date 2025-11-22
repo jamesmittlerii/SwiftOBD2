@@ -576,6 +576,7 @@ private extension MOCKComm {
                 var kPa = 25.0 + load * 70.0 + smoothNoise(seed: 8, scale: 2.0)
                 kPa = max(20.0, min(100.0, kPa))
                 let A = UInt8(max(0, min(255, Int(kPa.rounded()))))
+                //return "0B C6"
                 return "0B " + String(format: "%02X", A)
             case .rpm:
                 let speedValue = currentMockSpeed()

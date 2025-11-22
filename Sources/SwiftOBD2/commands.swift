@@ -573,7 +573,7 @@ extension OBDCommand.Mode1 {
         case .shortFuelTrim2: return CommandProperties("0108", "Short Term Fuel Trim - Bank 2", 2, .percentCentered, true)
         case .longFuelTrim2: return CommandProperties("0109", "Long Term Fuel Trim - Bank 2", 2, .percentCentered, true)
         case .fuelPressure: return CommandProperties("010A", "Fuel Pressure", 2, .fuelPressure, true, maxValue: 765)
-        case .intakePressure: return CommandProperties("010B", "Intake Manifold Pressure", 3, .pressure, true, maxValue: 255)
+        case .intakePressure: return CommandProperties("010B", "Intake Manifold Pressure", 2, .pressure, true, maxValue: 255)
         case .rpm: return CommandProperties("010C", "RPM", 3, .uas(0x07), true, maxValue: 8000)
         case .speed: return CommandProperties("010D", "Vehicle Speed", 2, .uas(0x09), true, maxValue: 280)
         case .timingAdvance: return CommandProperties("010E", "Timing Advance", 2, .timingAdvance, true, maxValue: 64, minValue: -64)
