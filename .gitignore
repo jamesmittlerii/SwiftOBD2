@@ -6,3 +6,12 @@ DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
+
+# Flutter/Dart transient artifacts
+**/.dart_tool/
+**/.flutter-plugins-dependencies
+**/.packages
+**/build/
+
+# Flutter test/build generated assets
+**/pubspec.lock
