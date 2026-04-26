@@ -44,7 +44,10 @@ class BleManager implements CommProtocol {
     }
 
     try {
-      await _device!.connect(timeout: Duration(milliseconds: (timeout * 1000).toInt()));
+      await _device!.connect(
+        license: License.free,
+        timeout: Duration(milliseconds: (timeout * 1000).toInt()),
+      );
       
       _connectionStateSub = _device!.connectionState.listen((state) {
         if (state == BluetoothConnectionState.disconnected) {
