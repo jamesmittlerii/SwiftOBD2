@@ -2,6 +2,117 @@ import '../decoders.dart';
 import 'obd_command.dart';
 
 class Commands {
+  static const Map<String, String> _aliasToCommandId = {
+    "rpm": "010C",
+    "speed": "010D",
+    "coolanttemp": "0105",
+    "intaketemp": "010F",
+    "status": "0101",
+    "fuelstatus": "0103",
+    "get_dtc": "03",
+    "controlmodulevoltage": "0142",
+    "commandedequivratio": "0144",
+    "engineoiltemp": "015C",
+    "fuelpressure": "010A",
+    "catalysttempb1s1": "013C",
+    "catalysttempb2s1": "013D",
+    "catalysttempb1s2": "013E",
+    "catalysttempb2s2": "013F",
+    "throttlepos": "0111",
+    "throttleactuator": "014C",
+    "throttleposb": "0147",
+    "throttleposc": "0148",
+    "throttleposd": "0149",
+    "throttlepose": "014A",
+    "throttleposf": "014B",
+    "timingadvance": "010E",
+    "ambientairtemp": "0146",
+    "relativethrottlepos": "0145",
+    "engineload": "0104",
+    "absoluteload": "0143",
+    "fuellevel": "012F",
+    "barometricpressure": "0133",
+    "intakepressure": "010B",
+    "fuelrailpressureabs": "0159",
+    "fuelrailpressuredirect": "0123",
+    "fuelrailpressurevac": "0122",
+    "maf": "0110",
+    "fuelrate": "015E",
+    "relativeaccelpos": "015A",
+    "shortfueltrim1": "0106",
+    "longfueltrim1": "0107",
+    "shortfueltrim2": "0108",
+    "longfueltrim2": "0109",
+    "o2bank1sensor1": "0114",
+    "o2bank1sensor2": "0115",
+    "o2bank1sensor3": "0116",
+    "o2bank1sensor4": "0117",
+    "o2bank2sensor1": "0118",
+    "o2bank2sensor2": "0119",
+    "o2bank2sensor3": "011A",
+    "o2sensor": "0113",
+    "fueltype": "0151",
+    "obdcompliance": "011C",
+    "statusdrivecycle": "0141",
+    "freezedtc": "0202",
+    "airstatus": "0112",
+    "evapvaporpressure": "0132",
+    "evapvaporpressurealt": "0154",
+    "evapvaporpressureabs": "0153",
+    "evaporativepurge": "012E",
+    "commandedegr": "012C",
+    "egrerror": "012D",
+    "warmupssincedtccleared": "0130",
+    "distancesincedtccleared": "0131",
+    "distancewmil": "0121",
+    "runtime": "011F",
+    "runtimemil": "014D",
+    "timesincedtccleared": "014E",
+    "hybridbatterylife": "015B",
+    "fuelinjectiontiming": "015D",
+    "maxmaf": "0150",
+    "ethanopercent": "0152",
+    "o2sensor1wrvolatage": "0124",
+    "o2sensor2wrvolatage": "0125",
+    "o2sensor3wrvolatage": "0126",
+    "o2sensor4wrvolatage": "0127",
+    "o2sensor5wrvolatage": "0128",
+    "o2sensor6wrvolatage": "0129",
+    "o2sensor7wrvolatage": "012A",
+    "o2sensor8wrvolatage": "012B",
+    "o2sensor1wrcurrent": "0134",
+    "o2sensor2wrcurrent": "0135",
+    "o2sensor3wrcurrent": "0136",
+    "o2sensor4wrcurrent": "0137",
+    "o2sensor5wrcurrent": "0138",
+    "o2sensor6wrcurrent": "0139",
+    "o2sensor7wrcurrent": "013A",
+    "o2sensor8wrcurrent": "013B",
+  };
+
+  /// Swift `OBDCommand.GMMode22` hex IDs (`commands.swift` extension on GMMode22).
+  static const Map<String, String> _gmMode22AliasToCommandId = {
+    "engineoiltemp": "221154",
+    "engineoilpressure": "221470",
+    "achighpressure": "221144",
+    "transfluidtemp": "221940",
+  };
+
+  static String resolveCommandId(String alias, {String? pidType}) {
+    final trimmed = alias.trim();
+    if (trimmed.isEmpty) return alias;
+    final upper = trimmed.toUpperCase();
+    if (allCommands.containsKey(upper)) return upper;
+
+    final normalized = trimmed.toLowerCase();
+    final t = pidType?.trim().toLowerCase();
+    if (t == 'gmmode22') {
+      final gmHex = _gmMode22AliasToCommandId[normalized];
+      if (gmHex != null) return gmHex;
+    }
+    return _aliasToCommandId[normalized] ?? upper;
+  }
+
   static final Map<String, ObdCommand> allCommands = {
     "ATD": ObdCommand(CommandProperties("ATD", "Set to default", 5, null, live: false, maxValue: 100, minValue: 0)),
     "ATZ": ObdCommand(CommandProperties("ATZ", "Reset", 5, null, live: false, maxValue: 100, minValue: 0)),

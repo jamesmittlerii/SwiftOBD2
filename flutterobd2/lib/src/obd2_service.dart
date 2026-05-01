@@ -8,7 +8,7 @@ import 'communication/wifi_manager.dart';
 import 'commands/obd_command.dart';
 import 'configuration_service.dart';
 import 'decoders.dart';
-import 'data/trouble_codes.dart';
+import 'data/trouble_code_catalog.dart';
 import 'utils.dart';
 import 'parser.dart';
 
@@ -47,6 +47,7 @@ class Obd2Service implements ObdServiceDelegate {
     int? port,
     ConfigurationService? configurationService,
   }) : _configurationService = configurationService ?? ConfigurationService() {
+    unawaited(TroubleCodeCatalog.ensureLoaded());
     _initializeElm327(host, port);
     // Respect explicit constructor parameters from host apps.
     // Only restore saved settings when the caller used pure defaults.
@@ -389,38 +390,19 @@ class Obd2Service implements ObdServiceDelegate {
       ];
 
   List<TroubleCodeMetadata> _demoTroubleCodes() {
-    // Align demo severity buckets with Swift heuristic in TroubleCodes.swift:
-    // 1 Critical, 1 High, 3 Moderate, 2 Low.
-    const severityByCode = <String, String>{
-      "P0300": "Critical",
-      "P0170": "High",
-      "P0101": "Moderate",
-      "P0104": "Moderate",
-      "P0207": "Moderate",
-      "P0411": "Low",
-      "P0420": "Low",
-    };
-
     return _demoDtcCodes().map((code) {
-      final base = troubleCodeDictionary[code];
+      final base = TroubleCodeCatalog.lookup(code);
       if (base == null) {
         return TroubleCodeMetadata(
           code: code,
           title: "Diagnostic Trouble Code",
           description: "Simulated demo DTC",
-          severity: severityByCode[code] ?? "Moderate",
+          severity: "Moderate",
           causes: const ["Unknown"],
           remedies: const ["Inspect vehicle"],
         );
       }
-      return TroubleCodeMetadata(
-        code: base.code,
-        title: base.title,
-        description: base.description,
-        severity: severityByCode[code] ?? base.severity,
-        causes: base.causes,
-        remedies: base.remedies,
-      );
+      return base;
     }).toList();
   }
 }

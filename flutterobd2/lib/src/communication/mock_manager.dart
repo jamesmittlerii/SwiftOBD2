@@ -5,7 +5,6 @@ import '../comm_protocol.dart';
 
 class MockManager implements CommProtocol {
   final _stateController = StreamController<ConnectionState>.broadcast();
-  final _random = Random();
 
   @override
   Stream<ConnectionState> get connectionStatePublisher => _stateController.stream;
@@ -61,9 +60,17 @@ class MockManager implements CommProtocol {
         _echoOn = false;
         return _reply("OK", message);
       }
-      if (action == "Z") return ["ELM327 v1.5"];
+      if (action == "Z") return _reply("ELM327 v1.5", message);
       if (action == "DPN") return ["06"];
-      if (action == "RV") return _reply("13.8", message);
+      if (action == "RV") {
+        final v = (13.6 + _smoothNoise(seed: 1.0, scale: 0.15)).clamp(12.2, 14.6);
+        return _reply(v.toStringAsFixed(2), message);
+      }
+      if (action.startsWith("ST")) {
+        final tail = action.substring(2);
+        final parsed = int.tryParse(tail, radix: 16);
+        return _reply(parsed == null ? "NO DATA" : "OK", message);
+      }
       return _reply("OK", message);
     }
 
@@ -189,6 +196,11 @@ class MockManager implements CommProtocol {
     final dt = now.difference(_lastTick!).inMilliseconds / 1000.0;
     _lastTick = now;
     _elapsedSeconds += dt;
+    if (_elapsedSeconds >= 120.0) {
+      _sessionStart = now;
+      _lastTick = now;
+      _elapsedSeconds = 0.0;
+    }
   }
 
   double _speedKmh() {
@@ -250,7 +262,7 @@ class MockManager implements CommProtocol {
   String _fuelStatusBytes() {
     _tick();
     final coolantC = ((_elapsedSeconds / 60.0).clamp(0.0, 1.0) * 100.0);
-    final throttle = int.parse(_throttleByte(), radix: 16) * 100.0 / 255.0;
+    final throttle = _throttleDemandPercent();
     int code;
     if (coolantC < 60.0) {
       code = 1; // cold open loop
@@ -259,16 +271,8 @@ class MockManager implements CommProtocol {
     } else {
       code = 2; // closed loop
     }
-    // FuelStatusDecoder expects one-hot bitset; code = 8 - index.
-    final oneHotByCode = <int, int>{
-      1: 0x01,
-      2: 0x02,
-      3: 0x04,
-      4: 0x08,
-      5: 0x10,
-    };
-    final oneHot = oneHotByCode[code] ?? 0x00;
-    return "${_hexByte(oneHot)} ${_hexByte(oneHot)}";
+    // Swift parity: send status code in both banks.
+    return "${_hexByte(code)} ${_hexByte(code)}";
   }
 
   String _coolantByte() {
@@ -288,12 +292,28 @@ class MockManager implements CommProtocol {
   String _ambientTempByte() => _hexByte(40 + 10 * sin(_elapsedSeconds * 0.03));
 
   String _throttleByte() {
-    final speed = _speedKmh();
-    final value = ((0.2 + ((speed / 120.0).clamp(0.0, 1.0)) + (_random.nextDouble() * 0.05))
-            .clamp(0.0, 1.0) *
-        255.0)
-        .round();
+    final demand = (_throttleDemandPercent() / 100.0).clamp(0.0, 1.0);
+    final value = (demand * 255.0).round();
     return value.toRadixString(16).padLeft(2, '0').toUpperCase();
+  }
+
+  double _throttleDemandPercent() {
+    final speed = _speedKmh();
+    final rpm = _rpmFromSpeed(speed);
+    final rpmN = ((rpm - 800.0) / (8000.0 - 800.0)).clamp(0.0, 1.0);
+    var demand = 0.15 + 0.45 * pow(rpmN, 2.0);
+    demand += _smoothNoise(seed: 5.5, scale: 0.015);
+
+    final prevElapsed = (_elapsedSeconds - 0.2).clamp(0.0, double.infinity);
+    final prevSpeed = prevElapsed < 15.0
+        ? (prevElapsed / 15.0) * 20.0
+        : 45.0 + 25.0 * sin((prevElapsed - 15.0) / 30.0 * pi * 2.0);
+    final accel = (speed - prevSpeed) / 0.2;
+    final isIdle = rpm < 1100.0 && speed < 3.0;
+    if (isIdle) demand = max(demand, 0.06);
+    final isCoasting = rpm > 1200.0 && accel < -4.0 && !isIdle;
+    if (isCoasting) demand = min(demand, 0.03 + 0.03 * rpmN);
+    return (demand * 100.0).clamp(0.0, 100.0);
   }
 
   String _engineLoadByte() {
@@ -392,9 +412,14 @@ class MockManager implements CommProtocol {
 
   String _voltageBytes() {
     _tick();
-    final volts = (13.6 + sin(_elapsedSeconds * 0.05) * 0.15).clamp(12.2, 14.6);
+    final volts = (13.6 + _smoothNoise(seed: 1.0, scale: 0.15)).clamp(12.2, 14.6);
     final raw = (volts * 1000.0).round();
     return "${_hexByte((raw >> 8) & 0xFF)} ${_hexByte(raw & 0xFF)}";
+  }
+
+  double _smoothNoise({required double seed, required double scale}) {
+    final n = sin((_elapsedSeconds + seed) * 0.2) * 0.6 + sin((_elapsedSeconds * 0.07) + seed * 3.1) * 0.4;
+    return n * scale;
   }
 
   double _rpmFromSpeed(double speed) {

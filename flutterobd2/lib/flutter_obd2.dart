@@ -4,7 +4,6 @@ export 'src/obd2_service.dart';
 export 'src/commands/commands.dart';
 export 'src/commands/obd_command.dart';
 export 'src/data/codes.dart';
-export 'src/data/trouble_codes.dart';
 export 'src/decoders.dart';
 export 'src/parser.dart';
 export 'src/utils.dart';

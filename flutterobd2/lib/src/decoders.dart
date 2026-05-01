@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'utils.dart';
-import 'data/trouble_codes.dart';
 import 'data/codes.dart';
+import 'data/trouble_code_catalog.dart';
 import 'parser.dart';
 
 enum MeasurementUnit {
@@ -385,18 +385,16 @@ class DtcDecoder implements Decoder {
     int hexVal = ((first & 0x3F) << 8) | second;
     dtc += hexVal.toRadixString(16).padLeft(4, '0').substring(1).toUpperCase();
 
-    if (troubleCodeDictionary.containsKey(dtc)) {
-      return troubleCodeDictionary[dtc];
-    } else {
-      return TroubleCodeMetadata(
-        code: dtc,
-        title: "none",
-        description: "No description available.",
-        severity: "Moderate",
-        causes: [],
-        remedies: [],
-      );
-    }
+    final enriched = TroubleCodeCatalog.lookup(dtc);
+    if (enriched != null) return enriched;
+    return TroubleCodeMetadata(
+      code: dtc,
+      title: "none",
+      description: "No description available.",
+      severity: "Moderate",
+      causes: [],
+      remedies: [],
+    );
   }
 }
 
