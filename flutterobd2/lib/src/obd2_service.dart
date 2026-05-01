@@ -178,10 +178,6 @@ class Obd2Service implements ObdServiceDelegate {
   }
 
   Future<Map<ObdCommand, DecodeResult>> requestPID(ObdCommand command, {MeasurementUnit unit = MeasurementUnit.metric}) async {
-    if (connectionType == ConnectionType.demo && command.properties.command == "03") {
-      return {command: DecodeResult(troubleCodes: _demoTroubleCodes())};
-    }
-
     if (command.properties.command == "03") {
       final dtcsByECU = await elm327.scanForTroubleCodes();
       return {
@@ -333,9 +329,6 @@ class Obd2Service implements ObdServiceDelegate {
   }
 
   Future<Map<EcuId, List<TroubleCodeMetadata>>> scanForTroubleCodes() async {
-    if (connectionType == ConnectionType.demo) {
-      return {EcuId.engine: _demoTroubleCodes()};
-    }
     try {
       return await elm327.scanForTroubleCodes();
     } catch (e) {
@@ -379,32 +372,6 @@ class Obd2Service implements ObdServiceDelegate {
     );
   }
 
-  List<String> _demoDtcCodes() => const [
-        "P0300",
-        "P0170",
-        "P0101",
-        "P0104",
-        "P0207",
-        "P0411",
-        "P0420",
-      ];
-
-  List<TroubleCodeMetadata> _demoTroubleCodes() {
-    return _demoDtcCodes().map((code) {
-      final base = TroubleCodeCatalog.lookup(code);
-      if (base == null) {
-        return TroubleCodeMetadata(
-          code: code,
-          title: "Diagnostic Trouble Code",
-          description: "Simulated demo DTC",
-          severity: "Moderate",
-          causes: const ["Unknown"],
-          remedies: const ["Inspect vehicle"],
-        );
-      }
-      return base;
-    }).toList();
-  }
 }
 
 enum ObdServiceErrorType {
