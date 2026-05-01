@@ -50,6 +50,9 @@ enum class Decoders {
                 decoderMap.containsKey("rpm") -> Rpm
                 decoderMap.containsKey("voltage") || decoderMap.containsKey("sensorVoltage") -> Voltage
                 decoderMap.containsKey("speed") -> Speed
+                decoderMap.containsKey("dtc") -> Dtc
+                decoderMap.containsKey("fuelStatus") -> FuelStatus
+                decoderMap.containsKey("status") -> Status
                 decoderMap.containsKey("uas") -> {
                     val uas = decoderMap["uas"] as? Map<*, *>
                     val id = uas?.get("_0") as? Double

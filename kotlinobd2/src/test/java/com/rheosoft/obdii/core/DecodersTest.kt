@@ -99,4 +99,14 @@ class DecodersTest {
             assertEquals(expected, codes)
         }
     }
+
+    @Test
+    fun testCatalogStatusDecoderKey() {
+        val result = OBDCommand.Mode1("01").properties.decode(listOf(0x41, 0x01, 0x87, 0x70, 0xEF, 0xEF))
+
+        assertTrue(result is DecodeResult.StatusResult)
+        assertEquals(true, result.value.milOn)
+        assertEquals(7, result.value.dtcCount)
+        assertTrue(result.value.monitors.isNotEmpty())
+    }
 }
