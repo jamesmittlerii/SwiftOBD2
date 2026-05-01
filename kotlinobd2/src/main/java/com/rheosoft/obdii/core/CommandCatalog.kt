@@ -69,5 +69,6 @@ object CommandCatalog {
         val live: Boolean = false,
         val maxValue: Double = 100.0,
         val minValue: Double = 0.0,
+        val decoder: Map<String, Any>? = null
     )
 }

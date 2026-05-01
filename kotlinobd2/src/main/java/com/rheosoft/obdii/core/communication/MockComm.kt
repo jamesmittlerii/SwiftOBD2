@@ -426,7 +426,20 @@ class MockComm : CommProtocol {
         return "${hexByte(a)} 80"
     }
 
-    private fun frame(body: String): String = if (headersEnabled) "7E8 $body" else body
+    private fun frame(body: String): String {
+        val tokens = body.split(" ").filter { it.isNotBlank() }
+        val firstByte = tokens.firstOrNull()?.toIntOrNull(16) ?: 0
+        // If it's already a PCI byte (Single/First/Consecutive/FlowControl), don't add another.
+        // PCI bytes are 0x00..0x3F for Single/First/Consecutive/FlowControl
+        val hasPci = firstByte <= 0x3F
+        
+        val content = if (hasPci) body else {
+            val pci = "%02X".format(tokens.size)
+            "$pci $body"
+        }
+        
+        return if (headersEnabled) "7E8 $content" else content
+    }
 
     private fun withEcho(command: String, responses: List<String>): List<String> {
         if (!echoEnabled) return responses
