@@ -1,5 +1,11 @@
 package com.rheosoft.obdii.core
 
+import com.rheosoft.obdii.core.communication.MockComm
+import com.rheosoft.obdii.core.communication.WifiManager
+import com.rheosoft.obdii.core.communication.ble.BleManager
+import com.rheosoft.obdii.core.communication.ble.BlePlatformAdapter
+import com.rheosoft.obdii.core.communication.ble.UnsupportedBleAdapter
+import com.rheosoft.obdii.core.protocols.UnsupportedTransportError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

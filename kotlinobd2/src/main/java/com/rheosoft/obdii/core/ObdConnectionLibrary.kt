@@ -1,5 +1,7 @@
 package com.rheosoft.obdii.core
 
+import com.rheosoft.obdii.core.communication.ble.BlePlatformAdapter
+import com.rheosoft.obdii.core.communication.ble.UnsupportedBleAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

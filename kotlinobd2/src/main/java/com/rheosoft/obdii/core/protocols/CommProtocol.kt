@@ -1,5 +1,8 @@
-package com.rheosoft.obdii.core
+package com.rheosoft.obdii.core.protocols
 
+import com.rheosoft.obdii.core.AdapterConnectionState
+import com.rheosoft.obdii.core.OBDServiceDelegate
+import com.rheosoft.obdii.core.PeripheralInfo
 import kotlinx.coroutines.flow.StateFlow
 
 interface CommProtocol {

@@ -1,5 +1,10 @@
-package com.rheosoft.obdii.core
+package com.rheosoft.obdii.core.communication.ble
 
+import com.rheosoft.obdii.core.AdapterConnectionState
+import com.rheosoft.obdii.core.OBDServiceDelegate
+import com.rheosoft.obdii.core.PeripheralInfo
+import com.rheosoft.obdii.core.protocols.CommProtocol
+import com.rheosoft.obdii.core.protocols.CommunicationError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.delay

@@ -1,5 +1,12 @@
-package com.rheosoft.obdii.core
+package com.rheosoft.obdii.core.communication
 
+import com.rheosoft.obdii.core.AdapterConnectionState
+import com.rheosoft.obdii.core.OBDServiceDelegate
+import com.rheosoft.obdii.core.PeripheralInfo
+import com.rheosoft.obdii.core.protocols.CommProtocol
+import com.rheosoft.obdii.core.protocols.CommunicationError
+import com.rheosoft.obdii.core.protocols.ConnectionTimedOutError
+import com.rheosoft.obdii.core.protocols.InvalidDataError
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

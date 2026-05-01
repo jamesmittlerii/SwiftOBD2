@@ -1,4 +1,6 @@
-package com.rheosoft.obdii.core
+package com.rheosoft.obdii.core.communication.ble
+
+import com.rheosoft.obdii.core.protocols.UnsupportedTransportError
 
 interface BlePlatformAdapter {
     suspend fun scan(timeoutMs: Long, serviceUuids: Set<String>): List<BlePeripheral>

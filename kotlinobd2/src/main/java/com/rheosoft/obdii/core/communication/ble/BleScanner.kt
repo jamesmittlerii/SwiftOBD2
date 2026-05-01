@@ -1,4 +1,4 @@
-package com.rheosoft.obdii.core
+package com.rheosoft.obdii.core.communication.ble
 
 import kotlinx.coroutines.withTimeout
 

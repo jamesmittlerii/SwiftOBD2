@@ -1,5 +1,6 @@
 package com.rheosoft.obdii.core
 
+import com.rheosoft.obdii.core.protocols.CommProtocol
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 

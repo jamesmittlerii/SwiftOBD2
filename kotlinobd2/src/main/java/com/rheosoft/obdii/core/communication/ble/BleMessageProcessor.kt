@@ -1,5 +1,6 @@
-package com.rheosoft.obdii.core
+package com.rheosoft.obdii.core.communication.ble
 
+import com.rheosoft.obdii.core.protocols.CommunicationError
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeout
 
