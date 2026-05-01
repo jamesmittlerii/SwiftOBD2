@@ -16,19 +16,27 @@ class Elm327Error implements Exception {
   String toString() => "Elm327Error: $message";
 
   static final noConnection = Elm327Error("No connection to the device.");
-  static final connectionNotReady = Elm327Error("The connection is not yet ready.");
+  static final connectionNotReady =
+      Elm327Error("The connection is not yet ready.");
   static final encodingError = Elm327Error("Failed to encode command.");
-  static final noProtocolFound = Elm327Error("No compatible OBD protocol found.");
-  static final adapterInitializationFailed = Elm327Error("Failed to initialize adapter.");
+  static final noProtocolFound =
+      Elm327Error("No compatible OBD protocol found.");
+  static final adapterInitializationFailed =
+      Elm327Error("Failed to initialize adapter.");
   static final ignitionOff = Elm327Error("Vehicle ignition is off.");
-  static final invalidProtocol = Elm327Error("Invalid or unsupported OBD protocol.");
+  static final invalidProtocol =
+      Elm327Error("Invalid or unsupported OBD protocol.");
   static final timeout = Elm327Error("Operation timed out.");
   static final unknownError = Elm327Error("An unknown error occurred.");
 
-  static Elm327Error invalidResponse(String msg) => Elm327Error("Invalid response received: $msg");
-  static Elm327Error sendFailed(Exception e) => Elm327Error("Failed to send command: $e");
-  static Elm327Error receiveFailed(Exception e) => Elm327Error("Failed to receive response: $e");
-  static Elm327Error connectionFailed(String reason) => Elm327Error("Connection failed: $reason");
+  static Elm327Error invalidResponse(String msg) =>
+      Elm327Error("Invalid response received: $msg");
+  static Elm327Error sendFailed(Exception e) =>
+      Elm327Error("Failed to send command: $e");
+  static Elm327Error receiveFailed(Exception e) =>
+      Elm327Error("Failed to receive response: $e");
+  static Elm327Error connectionFailed(String reason) =>
+      Elm327Error("Connection failed: $reason");
 }
 
 class ObdInfo {
@@ -48,10 +56,10 @@ class ObdInfo {
 class Elm327 {
   final CommProtocol _comm;
   ObdServiceDelegate? obdDelegate;
-  
+
   CanProtocol? canProtocol;
   List<String> _r100 = [];
-  
+
   ConnectionState _connectionState = ConnectionState.disconnected;
   StreamSubscription<ConnectionState>? _connectionSub;
 
@@ -66,14 +74,15 @@ class Elm327 {
   }
 
   ConnectionState get connectionState => _connectionState;
-  
+
   set connectionState(ConnectionState state) {
     _connectionState = state;
     obdDelegate?.connectionStateChanged(state);
     _comm.obdDelegate?.connectionStateChanged(state);
   }
 
-  Future<void> connectToAdapter({required double timeout, Object? peripheral}) async {
+  Future<void> connectToAdapter(
+      {required double timeout, Object? peripheral}) async {
     await _comm.connectAsync(timeout: timeout, peripheral: peripheral);
   }
 
@@ -91,7 +100,8 @@ class Elm327 {
     if (response.join().contains("OK")) {
       return response;
     } else {
-      throw Elm327Error.invalidResponse("message: $message, response: $response");
+      throw Elm327Error.invalidResponse(
+          "message: $message, response: $response");
     }
   }
 
@@ -99,7 +109,7 @@ class Elm327 {
     try {
       await sendCommand("ATZ");
       await Future.delayed(const Duration(milliseconds: 300));
-      
+
       await sendCommand("ATE0");
       await sendCommand("ATCRA7E8");
       await _okResponse("ATS0");
@@ -114,9 +124,11 @@ class Elm327 {
     }
   }
 
-  Future<ObdInfo> setupVehicle({ObdProtocol? preferredProtocol, bool querySupportedPIDs = true}) async {
+  Future<ObdInfo> setupVehicle(
+      {ObdProtocol? preferredProtocol, bool querySupportedPIDs = true}) async {
     final detectedProtocol = await _detectProtocol(preferredProtocol);
-    canProtocol = CanProtocol(detectedProtocol); // Assume CAN for now, Swift code uses protocol map.
+    canProtocol = CanProtocol(
+        detectedProtocol); // Assume CAN for now, Swift code uses protocol map.
 
     final vin = await requestVin();
     List<ObdCommand>? supportedPIDs;
@@ -145,7 +157,7 @@ class Elm327 {
         return preferredProtocol;
       }
     }
-    
+
     try {
       return await _detectProtocolAutomatically();
     } catch (e) {
@@ -161,7 +173,8 @@ class Elm327 {
     final response = await sendCommand("ATDPN");
     if (response.isNotEmpty && response[0].length >= 2) {
       final protocolHex = response[0].substring(1);
-      final protocol = ObdProtocol.values.firstWhereOrNull((p) => p.cmd == "ATSP$protocolHex");
+      final protocol = ObdProtocol.values
+          .firstWhereOrNull((p) => p.cmd == "ATSP$protocolHex");
       if (protocol != null) {
         await _testProtocol(protocol);
         return protocol;
@@ -173,7 +186,7 @@ class Elm327 {
   Future<ObdProtocol> _detectProtocolManually() async {
     for (final p in ObdProtocol.values) {
       if (p == ObdProtocol.none) continue;
-      
+
       try {
         await _okResponse(p.cmd);
         if (await _testProtocol(p)) {
@@ -240,6 +253,7 @@ class Elm327 {
   }
 
   Future<List<ObdCommand>> getSupportedPIDs() async {
+    await Commands.ensureInitialized();
     final pidGetters = Commands.pidGetterCommands
         .map((id) => Commands.allCommands[id])
         .whereType<ObdCommand>()
@@ -249,17 +263,21 @@ class Elm327 {
     for (final getter in pidGetters) {
       try {
         final response = await sendCommand(getter.properties.command);
-        final offset = int.tryParse(getter.properties.command.substring(2), radix: 16) ?? 0;
+        final offset =
+            int.tryParse(getter.properties.command.substring(2), radix: 16) ??
+                0;
         final supported = _parseResponse(response, offset: offset);
         if (supported != null) {
           final commands = Commands.allCommands.values.where(
-            (c) => c.properties.command.length >= 4 && supported.contains(c.properties.command.substring(2)),
+            (c) =>
+                c.properties.command.length >= 4 &&
+                supported.contains(c.properties.command.substring(2)),
           );
           supportedPIDs.addAll(commands);
         }
       } catch (_) {}
     }
-    
+
     supportedPIDs.removeWhere((c) => pidGetters.contains(c));
     return supportedPIDs.toSet().toList();
   }
@@ -288,7 +306,8 @@ class Elm327 {
     final supported = <String>{};
     for (int i = 0; i < binaryData.length; i++) {
       if (binaryData[i] == 1) {
-        final pid = (offset + i + 1).toRadixString(16).padLeft(2, '0').toUpperCase();
+        final pid =
+            (offset + i + 1).toRadixString(16).padLeft(2, '0').toUpperCase();
         supported.add(pid);
       }
     }
@@ -296,6 +315,7 @@ class Elm327 {
   }
 
   Future<String?> requestVin() async {
+    await Commands.ensureInitialized();
     final command = Commands.allCommands["0902"];
     if (command == null) return null;
 
@@ -304,7 +324,7 @@ class Elm327 {
       if (canProtocol == null) return null;
       final messages = canProtocol!.parse(response);
       if (messages.isEmpty || messages.first.data == null) return null;
-      
+
       var vin = String.fromCharCodes(messages.first.data!);
       vin = vin.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
       return vin;
@@ -314,30 +334,33 @@ class Elm327 {
   }
 
   Future<DecodeResult?> getStatus() async {
+    await Commands.ensureInitialized();
     final statusCommand = Commands.allCommands["0101"];
     if (statusCommand == null) return null;
-    
+
     final response = await sendCommand(statusCommand.properties.command);
     if (canProtocol == null) return null;
     final messages = canProtocol!.parse(response);
     if (messages.isEmpty || messages.first.data == null) return null;
-    
+
     final data = messages.first.data!.sublist(1);
     return statusCommand.properties.decode(data, MeasurementUnit.metric);
   }
 
   Future<Map<EcuId, List<TroubleCodeMetadata>>> scanForTroubleCodes() async {
+    await Commands.ensureInitialized();
     final dtcs = <EcuId, List<TroubleCodeMetadata>>{};
     final command = Commands.allCommands["03"];
     if (command == null) return dtcs;
-    
+
     final response = await sendCommand(command.properties.command);
     if (canProtocol == null) return dtcs;
     final messages = canProtocol!.parse(response);
-    
+
     for (final message in messages) {
       if (message.data == null) continue;
-      final result = command.properties.decode(message.data!.sublist(1), MeasurementUnit.metric);
+      final result = command.properties
+          .decode(message.data!.sublist(1), MeasurementUnit.metric);
       if (result != null && result.troubleCodes != null) {
         dtcs[message.ecu] = result.troubleCodes!;
       }
@@ -346,6 +369,7 @@ class Elm327 {
   }
 
   Future<void> clearTroubleCodes() async {
+    await Commands.ensureInitialized();
     final command = Commands.allCommands["04"];
     if (command != null) {
       await sendCommand(command.properties.command);

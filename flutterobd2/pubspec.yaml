@@ -22,3 +22,5 @@ dev_dependencies:
 flutter:
   assets:
     - lib/src/data/codes.json
+    - lib/src/data/commands.enriched.json
+    - lib/src/data/command_aliases.json

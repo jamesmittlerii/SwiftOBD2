@@ -12,6 +12,10 @@ DerivedData/
 **/.flutter-plugins-dependencies
 **/.packages
 **/build/
+**/.gradle/
 
 # Flutter test/build generated assets
 **/pubspec.lock
+
+# Local tooling downloads (not source-controlled)
+.tools/

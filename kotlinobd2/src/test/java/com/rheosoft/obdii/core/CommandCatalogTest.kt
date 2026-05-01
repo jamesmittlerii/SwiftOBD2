@@ -5,6 +5,20 @@ import kotlin.test.assertEquals
 
 class CommandCatalogTest {
     @Test
+    fun loads_dynamic_command_catalog_from_json() {
+        val rpm = CommandCatalog.allCommands["010C"]
+        assertEquals("RPM", rpm?.description)
+    }
+
+    @Test
+    fun derives_pid_getters_from_command_descriptions() {
+        val getters = CommandCatalog.pidGetterCommands.toSet()
+        assertEquals(true, getters.contains("0100"))
+        assertEquals(true, getters.contains("0600"))
+        assertEquals(true, getters.contains("0900"))
+    }
+
+    @Test
     fun resolve_mode1_alias_to_hex() {
         assertEquals("010C", CommandCatalog.resolveCommandId("rpm"))
         assertEquals("010C", CommandCatalog.resolveCommandId("rpm", pidType = "mode1"))
@@ -22,4 +36,4 @@ class CommandCatalogTest {
         assertEquals("221144", CommandCatalog.resolveCommandId("221144"))
     }
 }
-
+
