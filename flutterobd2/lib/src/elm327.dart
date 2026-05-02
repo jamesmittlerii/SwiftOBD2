@@ -359,8 +359,12 @@ class Elm327 {
 
     for (final message in messages) {
       if (message.data == null) continue;
+      final raw = message.data!;
+      // Mode 3 response: [0x43, count, dtcA_hi, dtcA_lo, dtcB_hi, dtcB_lo, ...]
+      // Strip the mode byte (0x43) AND the DTC count byte before decoding.
+      if (raw.length < 2) continue;
       final result = command.properties
-          .decode(message.data!.sublist(1), MeasurementUnit.metric);
+          .decode(raw.sublist(2), MeasurementUnit.metric);
       if (result != null && result.troubleCodes != null) {
         dtcs[message.ecu] = result.troubleCodes!;
       }

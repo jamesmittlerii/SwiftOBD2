@@ -148,26 +148,40 @@ class DtcDecoder : Decoder {
             val d4 = b and 0x0F
             val code = "$letter$d1${d2.toString(16)}${d3.toString(16)}${d4.toString(16)}".uppercase()
             val enriched = TroubleCodeCatalog.lookup(code)
-            codes += enriched ?: TroubleCodeMetadata(code = code, severity = "Moderate")
+            codes += enriched ?: TroubleCodeMetadata(code = code, severity = TroubleCodeCatalog.severityFor(code))
         }
         return DecodeResult.TroubleCodes(codes)
     }
 }
 
 class FuelStatusDecoder : Decoder {
+    private val fuelStatus = mapOf(
+        "0" to "Unavailable",
+        "1" to "Open Loop (cold engine)",
+        "2" to "Closed Loop (normal operation)",
+        "3" to "Open Loop (load/fuel cut)",
+        "4" to "Open loop: system fault detected",
+        "5" to "Closed loop: O₂ fault in feedback",
+    )
+
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
         if (data.size < 2) return DecodeResult.Failure("Insufficient data")
         val a = data[0]
         val b = data[1]
-        fun decodeByte(v: Int): StatusCodeMetadata? = when {
-            v and 0x01 != 0 -> StatusCodeMetadata("1", "Open loop due to insufficient engine temperature")
-            v and 0x02 != 0 -> StatusCodeMetadata("2", "Closed loop, using oxygen sensor feedback")
-            v and 0x04 != 0 -> StatusCodeMetadata("4", "Open loop due to engine load or fuel cut")
-            v and 0x08 != 0 -> StatusCodeMetadata("8", "Open loop due to system failure")
-            v and 0x10 != 0 -> StatusCodeMetadata("16", "Closed loop using at least one oxygen sensor")
-            else -> null
-        }
         return DecodeResult.FuelStatusResult(listOf(decodeByte(a), decodeByte(b)))
+    }
+
+    private fun decodeByte(v: Int): StatusCodeMetadata? {
+        if (v == 0) return StatusCodeMetadata("0", fuelStatus["0"]!!)
+        // Find the single set bit; code = 8 - bitIndex (matching Swift: 8 - bits.firstIndex(of: 1))
+        for (i in 0..7) {
+            if ((v shr (7 - i)) and 1 == 1) {
+                val code = (8 - i).toString()
+                val description = fuelStatus[code] ?: return null
+                return StatusCodeMetadata(code, description)
+            }
+        }
+        return null
     }
 }
 
@@ -180,18 +194,33 @@ class StatusDecoder : Decoder {
         val d = data[3]
         val milOn = a and 0x80 != 0
         val dtcCount = a and 0x7F
-        val monitors = listOf(
-            ReadinessMonitor("Misfire", supported = true, ready = b and 0x10 == 0),
-            ReadinessMonitor("Fuel System", supported = true, ready = b and 0x20 == 0),
-            ReadinessMonitor("Comprehensive Components", supported = true, ready = b and 0x40 == 0),
-            ReadinessMonitor("Catalyst", supported = c and 0x01 != 0, ready = d and 0x01 == 0),
-            ReadinessMonitor("Heated Catalyst", supported = c and 0x02 != 0, ready = d and 0x02 == 0),
-            ReadinessMonitor("Evaporative System", supported = c and 0x04 != 0, ready = d and 0x04 == 0),
-            ReadinessMonitor("Secondary Air System", supported = c and 0x08 != 0, ready = d and 0x08 == 0),
-            ReadinessMonitor("O2 Sensor", supported = c and 0x20 != 0, ready = d and 0x20 == 0),
-            ReadinessMonitor("O2 Heater", supported = c and 0x40 != 0, ready = d and 0x40 == 0),
-            ReadinessMonitor("EGR/VVT", supported = c and 0x80 != 0, ready = d and 0x80 == 0),
-        )
+        val isDiesel = b and 0x08 != 0
+        val monitors = if (isDiesel) {
+            listOf(
+                ReadinessMonitor("Misfire", supported = true, ready = b and 0x10 == 0),
+                ReadinessMonitor("Fuel System", supported = true, ready = b and 0x20 == 0),
+                ReadinessMonitor("Comprehensive Components", supported = true, ready = b and 0x40 == 0),
+                ReadinessMonitor("NMHC catalyst", supported = c and 0x01 != 0, ready = d and 0x01 == 0),
+                ReadinessMonitor("HNOx/SCR Catalyst", supported = c and 0x02 != 0, ready = d and 0x02 == 0),
+                ReadinessMonitor("Boost pressure", supported = c and 0x08 != 0, ready = d and 0x08 == 0),
+                ReadinessMonitor("Exhaust gas", supported = c and 0x20 != 0, ready = d and 0x20 == 0),
+                ReadinessMonitor("PM filter", supported = c and 0x40 != 0, ready = d and 0x40 == 0),
+                ReadinessMonitor("EGR/VVT System", supported = c and 0x80 != 0, ready = d and 0x80 == 0),
+            )
+        } else {
+            listOf(
+                ReadinessMonitor("Misfire", supported = true, ready = b and 0x10 == 0),
+                ReadinessMonitor("Fuel System", supported = true, ready = b and 0x20 == 0),
+                ReadinessMonitor("Comprehensive Components", supported = true, ready = b and 0x40 == 0),
+                ReadinessMonitor("Catalyst", supported = c and 0x01 != 0, ready = d and 0x01 == 0),
+                ReadinessMonitor("Heated Catalyst", supported = c and 0x02 != 0, ready = d and 0x02 == 0),
+                ReadinessMonitor("Evaporative System", supported = c and 0x04 != 0, ready = d and 0x04 == 0),
+                ReadinessMonitor("Secondary Air System", supported = c and 0x08 != 0, ready = d and 0x08 == 0),
+                ReadinessMonitor("O₂ Sensor", supported = c and 0x20 != 0, ready = d and 0x20 == 0),
+                ReadinessMonitor("O₂ Heater", supported = c and 0x40 != 0, ready = d and 0x40 == 0),
+                ReadinessMonitor("EGR/VVT System", supported = c and 0x80 != 0, ready = d and 0x80 == 0),
+            )
+        }
         return DecodeResult.StatusResult(Status(milOn = milOn, dtcCount = dtcCount, monitors = monitors))
     }
 }

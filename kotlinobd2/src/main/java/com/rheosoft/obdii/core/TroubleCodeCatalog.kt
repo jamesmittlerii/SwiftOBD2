@@ -39,6 +39,8 @@ object TroubleCodeCatalog {
 
     fun lookup(code: String): TroubleCodeMetadata? = entries[code]
 
+    fun severityFor(code: String): String = determineSeverity(code)
+
     private fun determineSeverity(code: String): String {
         val criticalCodes = setOf("P0087", "P0088", "P0217", "P0218", "P0219", "P0234", "P0606")
         if (code in criticalCodes || code.startsWith("P030") || code.startsWith("P031")) return "Critical"
