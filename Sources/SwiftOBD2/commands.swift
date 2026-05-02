@@ -214,6 +214,8 @@ public enum OBDCommand: Codable, Hashable, Comparable, Identifiable {
         case engineOilPressure
         case transFluidTemp
         case ACHighPressure
+        case transSlipSpeed
+        case transGear
     }
 
     public enum Protocols: CaseIterable, Codable, Comparable {
@@ -551,6 +553,8 @@ extension OBDCommand.GMMode22
         case .transFluidTemp: return CommandProperties("221940", "Transmission Fluid Temp", 3, .temp, true, maxValue: 215, minValue: -40)
         case .engineOilPressure: return CommandProperties("221470", "Engine Oil Pressure", 3, .GMoilPressure, true)
         case .ACHighPressure: return CommandProperties("221144", "Air Conditioner High Pressure", 3, .GMACPressure, true)
+        case .transSlipSpeed: return CommandProperties("221992", "TCC Slip", 3, .uas(0x81), true, maxValue: 1000, minValue: -1000)
+        case .transGear: return CommandProperties("22199A", "Gear", 3, .uas(0x01), true, maxValue: 6, minValue: 1)
         }
     }
     

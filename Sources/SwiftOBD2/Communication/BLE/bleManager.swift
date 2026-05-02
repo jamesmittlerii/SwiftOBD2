@@ -180,7 +180,7 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
 
     func centralManagerDidPowerOn() {
         guard let device = peripheralManager.connectedPeripheral else {
-            startScanning(BLEPeripheralScanner.supportedServices)
+            //startScanning(BLEPeripheralScanner.supportedServices)
             return
         }
         // Use default connection timeout when auto-reconnecting
