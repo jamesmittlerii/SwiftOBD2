@@ -387,12 +387,6 @@ private extension MOCKComm {
                 return "19 40 49 00"
             case .engineOilTemp:
                 return "11 54 64 00"
-            case .transGear:
-                return "19 9A 01 00"
-            case .transSlipSpeed:
-                return "19 92 64 00"
-                
-              
             }
         case .mode1(let command):
             switch command {
