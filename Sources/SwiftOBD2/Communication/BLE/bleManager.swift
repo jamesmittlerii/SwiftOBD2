@@ -102,6 +102,7 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
         // Use background queue for better performance, but dispatch UI updates to main queue
         let bleQueue = DispatchQueue(label: "com.swiftobd2.ble", qos: .userInitiated)
         
+        /* TODO FIX ME
         centralManager = CBCentralManager(
             delegate: self,
             queue: bleQueue,
@@ -109,7 +110,8 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
                 CBCentralManagerOptionShowPowerAlertKey: true,
                 CBCentralManagerOptionRestoreIdentifierKey: BLEManager.RestoreIdentifierKey,
             ]
-        )
+        ) */
+        centralManager = CBCentralManager(delegate: self, queue: bleQueue, options: [:])
 
         messageProcessor = BLEMessageProcessor()
         characteristicHandler = BLECharacteristicHandler(messageProcessor: messageProcessor)
@@ -180,7 +182,7 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
 
     func centralManagerDidPowerOn() {
         guard let device = peripheralManager.connectedPeripheral else {
-            //startScanning(BLEPeripheralScanner.supportedServices)
+            // TODO FIXME startScanning(BLEPeripheralScanner.supportedServices)
             return
         }
         // Use default connection timeout when auto-reconnecting
