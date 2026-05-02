@@ -380,8 +380,8 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         }
 
         let pidHex = String(command.properties.command.suffix(2))
-        let requestedPid = UInt8(pidHex, radix: 16) ?? 0x00
-        let firstPayloadByte = responseData.first ?? 0x00
+        _ = UInt8(pidHex, radix: 16) ?? 0x00
+        _ = responseData.first ?? 0x00
 
         var batchedResponse = BatchedResponse(response: responseData, unit)
 
@@ -404,7 +404,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
                 return .failure(.noData)
             }
             
-            let pidsize = command.properties.command.count/2 - 1
+            _ = command.properties.command.count/2 - 1
             return command.properties.decode(data: responseData.dropFirst())
         } catch {
             throw OBDServiceError.commandFailed(command: command.properties.command, error: error)

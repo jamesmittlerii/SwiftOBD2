@@ -27,12 +27,14 @@ public enum MeasurementUnit: String, Codable {
 }
 
 public struct Status: Codable, Hashable {
+    public let isDiesel: Bool
     public let milOn: Bool
     public let dtcCount: Int
     public let monitors: [ReadinessMonitor]
     
-    public init(milOn: Bool, dtcCount: Int, monitors: [ReadinessMonitor]) {
+    public init(milOn: Bool, dtcCount: Int, monitors: [ReadinessMonitor], isDiesel: Bool) {
            self.milOn = milOn
+        self.isDiesel = isDiesel
            self.dtcCount = dtcCount
            self.monitors = monitors
        }
@@ -414,8 +416,10 @@ struct InjectTimingDecoder: Decoder {
             return .failure(.invalidData)
         }
 
-        let raw = bytesToInt(local)
-        let value = (Double(raw) - 21000.0) / 10.0
+        let raw = bytesToInt(local) // Assuming this handles Big Endian (0x0000 to 0xFFFF)
+        
+        // Standard OBD-II Formula for PID 0x5D
+        let value = (Double(raw) / 128.0) - 210.0
 
         return .success(
             .measurementResult(
@@ -826,7 +830,7 @@ struct StatusDecoder: Decoder {
             ]
         }
 
-        let output = Status(milOn: milOn, dtcCount: dtcCount, monitors: monitors)
+        let output = Status(milOn: milOn, dtcCount: dtcCount, monitors: monitors, isDiesel: isDiesel)
         return .success(.statusResult(output))
     }
 }
