@@ -26,6 +26,9 @@ class BleManager implements CommProtocol {
   Completer<List<String>>? _messageCompleter;
   final StringBuffer _receiveBuffer = StringBuffer();
 
+  /// Serial queue for commands to prevent concurrent access issues.
+  Future<void> _lock = Future.value();
+
   @override
   Future<void> connectAsync({required double timeout, Object? peripheral}) async {
     _setConnectionState(ConnectionState.connecting);
@@ -79,14 +82,29 @@ class BleManager implements CommProtocol {
 
   @override
   Future<List<String>> sendCommand(String message, {int retries = 3}) async {
-    if (_writeCharacteristic == null || _device == null) {
-      throw Exception("BLE device or write characteristic not connected.");
+    final completer = Completer<List<String>>();
+    final previousLock = _lock;
+    final newLock = Completer<void>();
+    _lock = newLock.future;
+
+    try {
+      await previousLock;
+      if (_writeCharacteristic == null || _device == null) {
+        throw Exception("BLE device or write characteristic not connected.");
+      }
+      
+      final result = await _executeCommand(message, retries: retries);
+      completer.complete(result);
+    } catch (e) {
+      completer.completeError(e);
+    } finally {
+      newLock.complete();
     }
 
-    if (_messageCompleter != null) {
-      throw Exception("A command is already in progress.");
-    }
+    return completer.future;
+  }
 
+  Future<List<String>> _executeCommand(String message, {int retries = 3}) async {
     Exception? lastError;
     for (int i = 0; i < retries; i++) {
       _messageCompleter = Completer<List<String>>();

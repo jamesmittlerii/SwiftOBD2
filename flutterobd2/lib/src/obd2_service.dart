@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'dart:typed_data';
 import 'comm_protocol.dart';
 import 'elm327.dart';
@@ -11,6 +12,7 @@ import 'decoders.dart';
 import 'data/trouble_code_catalog.dart';
 import 'utils.dart';
 import 'parser.dart';
+import 'utils/logger.dart';
 
 enum ConnectionType {
   bluetooth,
@@ -100,6 +102,7 @@ class Obd2Service implements ObdServiceDelegate {
 
   @override
   void connectionStateChanged(ConnectionState state) {
+    ObdLog.info('connection state changed to ${state.name}', category: 'Service');
     connectionState = state;
     _connectionStateController.add(state);
     if (state == ConnectionState.disconnected) {
@@ -151,6 +154,7 @@ class Obd2Service implements ObdServiceDelegate {
   }
 
   Future<void> scanForPeripherals() async {
+    ObdLog.info('starting scan for peripherals...', category: 'Service');
     isScanning = true;
     _isScanningController.add(true);
     try {
@@ -356,6 +360,7 @@ class Obd2Service implements ObdServiceDelegate {
     try {
       return await elm327.sendCommand(message, retries: retries);
     } catch (e) {
+      ObdLog.error('command failed [$message]: $e', category: 'Communication');
       throw ObdServiceException(
         ObdServiceErrorType.commandFailed,
         "Command failed: $message",

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:collection/collection.dart';
 
 import 'comm_protocol.dart';
@@ -7,6 +8,7 @@ import 'commands/commands.dart';
 import 'decoders.dart';
 import 'parser.dart';
 import 'utils.dart';
+import 'utils/logger.dart';
 
 class Elm327Error implements Exception {
   final String message;
@@ -92,7 +94,10 @@ class Elm327 {
   }
 
   Future<List<String>> sendCommand(String message, {int retries = 1}) async {
-    return await _comm.sendCommand(message, retries: retries);
+    ObdLog.debug('>> $message', category: 'Communication');
+    final response = await _comm.sendCommand(message, retries: retries);
+    ObdLog.debug('<< ${response.join(", ")}', category: 'Communication');
+    return response;
   }
 
   Future<List<String>> _okResponse(String message) async {
@@ -106,6 +111,7 @@ class Elm327 {
   }
 
   Future<void> adapterInitialization() async {
+    ObdLog.info('Initializing adapter...', category: 'Service');
     try {
       await sendCommand("ATZ");
       await Future.delayed(const Duration(milliseconds: 300));
@@ -120,18 +126,23 @@ class Elm327 {
       // Keep startup detection tolerant. Some vehicles need more than the
       // aggressive 40 ms ATST0A timeout while the ELM is finding a protocol.
       await _okResponse("ATST64");
+      ObdLog.info('Adapter initialized successfully.', category: 'Service');
     } catch (e) {
+      ObdLog.error('Adapter initialization failed: $e', category: 'Service');
       throw Elm327Error.adapterInitializationFailed;
     }
   }
 
   Future<ObdInfo> setupVehicle(
       {ObdProtocol? preferredProtocol, bool querySupportedPIDs = true}) async {
+    ObdLog.info('Setting up vehicle...', category: 'Service');
     final detectedProtocol = await _detectProtocol(preferredProtocol);
+    ObdLog.info('Protocol detected: ${detectedProtocol.name}', category: 'Service');
     canProtocol = CanProtocol(
         detectedProtocol); // Assume CAN for now, Swift code uses protocol map.
 
     final vin = await requestVin();
+    ObdLog.info('VIN: ${vin ?? "unknown"}', category: 'Service');
     List<ObdCommand>? supportedPIDs;
     Map<int, EcuId>? ecuMap;
 

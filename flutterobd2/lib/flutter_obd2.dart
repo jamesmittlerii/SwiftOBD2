@@ -7,6 +7,7 @@ export 'src/data/codes.dart';
 export 'src/decoders.dart';
 export 'src/parser.dart';
 export 'src/utils.dart';
+export 'src/utils/logger.dart';
 export 'src/comm_protocol.dart';
 export 'src/configuration_service.dart';
 export 'src/elm327.dart';
