@@ -78,7 +78,7 @@ class MOCKComm: CommProtocol {
             mode = mode + 40
 
             if response.count > 18 {
-                var chunks = response.chunked(by: 15)
+                let chunks = response.chunked(by: 15)
 
                 var ff = chunks[0]
 
@@ -242,17 +242,17 @@ class MOCKComm: CommProtocol {
             // PCI: 10 LL   (LL = total payload)
             let totalLen = UInt8(payload.count)
             let frame1Bytes = [0x10, totalLen] + Array(payload.prefix(6))
-            var frame1 = "7E8 " + frame1Bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+            let frame1 = "7E8 " + frame1Bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
 
             // ---- FRAME 2: Consecutive Frame #1 ----
             let frame2Bytes = [0x21] + Array(payload.dropFirst(6).prefix(7))
-            var frame2 = "7E8 " + frame2Bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+            let frame2 = "7E8 " + frame2Bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
 
             // ---- FRAME 3: Consecutive Frame #2 ----
             var remaining = Array(payload.dropFirst(6 + 7))
             while remaining.count < 7 { remaining.append(0x00) } // pad to 7
             let frame3Bytes = [0x22] + remaining
-            var frame3 = "7E8 " + frame3Bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+            let frame3 = "7E8 " + frame3Bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
 
             return [frame1, frame2, frame3]
         }else {
@@ -519,7 +519,7 @@ private extension MOCKComm {
                 // but commonly returning the code in the low nibble is acceptable for the mock.
                 // We'll place it in byte A and zero byte B.
                 let A = statusCode
-                let B: UInt8 = 0x00
+                let _: UInt8 = 0x00
                 return "03 " + String(format: "%02X %02X", A, A)
             case .engineLoad:
                 let speedValue = currentMockSpeed()

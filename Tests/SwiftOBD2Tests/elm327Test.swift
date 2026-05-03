@@ -61,7 +61,7 @@ final class ELM327Test: XCTestCase {
             XCTFail("Expected supportedPIDs to be not nil")
             return
         }
-        let supportedCommands = OBDCommand.allCommands
+        _ = OBDCommand.allCommands
             .filter { supportedPIDs.contains(String($0.properties.command.dropFirst(2))) }
             .map { $0 }
 //        print(supportedCommands)
