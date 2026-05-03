@@ -65,7 +65,8 @@ class ObdService(
             }
             elm327.connectToAdapter(timeoutMs = timeoutMs, peripheral = peripheral)
             elm327.adapterInitialization()
-            _connectionState.value = AdapterConnectionState.connectedToVehicle
+            // We stay in connectedToAdapter here.
+            // The manager will transition to settingUpVehicle while it queries PIDs.
         } catch (t: Throwable) {
             _connectionState.value = AdapterConnectionState.error
             connectedPeripheral = null

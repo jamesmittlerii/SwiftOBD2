@@ -20,18 +20,25 @@ class Elm327(
     }
 
     suspend fun adapterInitialization() {
-        sendCommand("ATZ")
-        // Swift parity: allow adapter reset to complete before next command.
-        delay(300)
-        sendCommand("ATE0")
-        sendCommand("ATS0")
-        sendCommand("ATL0")
-        sendCommand("ATH1")
-        sendCommand("ATSP0")
-        sendCommand("ATAT1")
-        sendCommand("ATAL")
-        // Keep startup detection tolerant while the ELM is finding a protocol.
-        sendCommand("ATST64")
+        obdInfo("Initializing ELM327 adapter...", LogCategory.Connection)
+        try {
+            sendCommand("ATZ")
+            // Swift parity: allow adapter reset to complete before next command.
+            delay(300)
+            sendCommand("ATE0")
+            sendCommand("ATS0")
+            sendCommand("ATL0")
+            sendCommand("ATH1")
+            sendCommand("ATSP0")
+            sendCommand("ATAT1")
+            sendCommand("ATAL")
+            // Keep startup detection tolerant while the ELM is finding a protocol.
+            sendCommand("ATST64")
+            obdInfo("ELM327 adapter initialized successfully.", LogCategory.Connection)
+        } catch (t: Throwable) {
+            obdError("Adapter initialization failed: ${t.message}", LogCategory.Connection)
+            throw t
+        }
     }
 
     suspend fun sendCommand(message: String, retries: Int = 1): List<String> = comm.sendCommand(message, retries)

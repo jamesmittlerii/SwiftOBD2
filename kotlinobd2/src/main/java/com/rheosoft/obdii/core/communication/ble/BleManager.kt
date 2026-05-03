@@ -1,8 +1,13 @@
 package com.rheosoft.obdii.core.communication.ble
 
 import com.rheosoft.obdii.core.AdapterConnectionState
+import com.rheosoft.obdii.core.LogCategory
 import com.rheosoft.obdii.core.OBDServiceDelegate
 import com.rheosoft.obdii.core.PeripheralInfo
+import com.rheosoft.obdii.core.obdDebug
+import com.rheosoft.obdii.core.obdError
+import com.rheosoft.obdii.core.obdInfo
+import com.rheosoft.obdii.core.obdWarning
 import com.rheosoft.obdii.core.protocols.CommProtocol
 import com.rheosoft.obdii.core.protocols.CommunicationError
 import kotlinx.coroutines.CoroutineScope
@@ -32,17 +37,21 @@ class BleManager(
             try {
                 val pendingResponse = processor.beginResponseWait()
                 adapter.write(target.id, write.uuid, "$command\r".toByteArray(Charsets.US_ASCII))
-                return processor.awaitResponse(pendingResponse, timeoutMs = 10_000)
+                val response = processor.awaitResponse(pendingResponse, timeoutMs = 10_000)
+                obdInfo("→ Sent: $command\n← Response: ${response.joinToString(" | ")}", LogCategory.Communication)
+                return response
             } catch (t: Throwable) {
                 processor.failPending(t)
                 lastError = t
             }
         }
+        obdError("Command failed: $command - ${lastError?.message}", LogCategory.Communication)
         throw CommunicationError("BLE send failed", lastError)
     }
 
     override fun disconnectPeripheral() {
         connectedPeripheral?.let { peripheral ->
+            obdInfo("Disconnecting from peripheral: ${peripheral.name ?: peripheral.id}", LogCategory.Bluetooth)
             CoroutineScope(Dispatchers.Main).launch {
                 runCatching { adapter.disconnect(peripheral.id) }
             }
@@ -59,11 +68,14 @@ class BleManager(
         val target = if (peripheral != null) {
             BlePeripheral(id = peripheral.id, name = peripheral.name)
         } else {
+            obdDebug("Starting BLE scan for OBD peripherals...", LogCategory.Bluetooth)
             val discovered = adapter.scan(timeoutMs = timeoutMs, serviceUuids = supportedBleServiceUuids)
             discovered.forEach(scanner::addDiscoveredPeripheral)
             selectPreferredPeripheral(discovered)
                 ?: throw CommunicationError("No compatible OBD BLE peripheral found")
         }
+        
+        obdInfo("Attempting connection to peripheral: ${target.name ?: target.id}", LogCategory.Bluetooth)
         var lastConnectError: Throwable? = null
         var connected = false
         for (attempt in 0 until 3) {
@@ -79,12 +91,15 @@ class BleManager(
             }
         }
         if (!connected && lastConnectError != null) {
+            obdError("Connection failed to peripheral: ${target.name ?: target.id} - ${lastConnectError.message}", LogCategory.Bluetooth)
             throw CommunicationError("BLE connect failed", lastConnectError)
         }
+        obdInfo("Connected to peripheral: ${target.name ?: target.id}", LogCategory.Bluetooth)
         peripheralManager.setPeripheral(target)
         connectedPeripheral = target
         stateFlow.value = AdapterConnectionState.connectedToAdapter
         obdDelegate?.connectionStateChanged(AdapterConnectionState.connectedToAdapter)
+        obdInfo("Characteristics setup complete, connected to adapter", LogCategory.Bluetooth)
     }
 
     override suspend fun scanForPeripherals(): List<PeripheralInfo> {

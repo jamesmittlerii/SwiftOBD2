@@ -1,8 +1,12 @@
 package com.rheosoft.obdii.core.communication
 
 import com.rheosoft.obdii.core.AdapterConnectionState
+import com.rheosoft.obdii.core.LogCategory
 import com.rheosoft.obdii.core.OBDServiceDelegate
 import com.rheosoft.obdii.core.PeripheralInfo
+import com.rheosoft.obdii.core.obdDebug
+import com.rheosoft.obdii.core.obdError
+import com.rheosoft.obdii.core.obdInfo
 import com.rheosoft.obdii.core.protocols.CommProtocol
 import com.rheosoft.obdii.core.protocols.CommunicationError
 import com.rheosoft.obdii.core.protocols.ConnectionTimedOutError
@@ -33,6 +37,7 @@ class WifiManager(
     override suspend fun connectAsync(timeoutMs: Long, peripheral: PeripheralInfo?): Unit = withContext(Dispatchers.IO) {
         stateFlow.value = AdapterConnectionState.connecting
         obdDelegate?.connectionStateChanged(AdapterConnectionState.connecting)
+        obdInfo("Attempting connection to WiFi adapter: $host:$port", LogCategory.Wifi)
         try {
             val s = Socket()
             s.connect(InetSocketAddress(host, port), timeoutMs.toInt())
@@ -42,13 +47,16 @@ class WifiManager(
             reader = BufferedReader(InputStreamReader(s.getInputStream()))
             stateFlow.value = AdapterConnectionState.connectedToAdapter
             obdDelegate?.connectionStateChanged(AdapterConnectionState.connectedToAdapter)
+            obdInfo("Connected to $host:$port", LogCategory.Wifi)
         } catch (e: SocketTimeoutException) {
             stateFlow.value = AdapterConnectionState.error
             obdDelegate?.connectionStateChanged(AdapterConnectionState.error)
+            obdError("WiFi connection timed out: $host:$port", LogCategory.Wifi)
             throw ConnectionTimedOutError()
         } catch (e: Exception) {
             stateFlow.value = AdapterConnectionState.error
             obdDelegate?.connectionStateChanged(AdapterConnectionState.error)
+            obdError("WiFi connection failed: ${e.message}", LogCategory.Wifi)
             throw CommunicationError("WiFi connect failed", e)
         }
     }
@@ -59,6 +67,7 @@ class WifiManager(
             try {
                 val localWriter = writer ?: throw CommunicationError("No active socket writer")
                 val localReader = reader ?: throw CommunicationError("No active socket reader")
+                obdDebug("Sending: $command", LogCategory.Wifi)
                 localWriter.print("$command\r")
                 localWriter.flush()
 
@@ -70,7 +79,9 @@ class WifiManager(
                     result.append(c)
                     if (c == '>') break
                 }
-                val lines = result.toString()
+                val text = result.toString()
+                obdDebug("Received: $text", LogCategory.Wifi)
+                val lines = text
                     .replace(">", "")
                     .split('\r', '\n')
                     .map { it.trim() }
@@ -81,6 +92,7 @@ class WifiManager(
                 lastError = e
             }
         }
+        obdError("WiFi send failed: $command - ${lastError?.message}", LogCategory.Wifi)
         throw CommunicationError("WiFi send failed", lastError)
     }
 

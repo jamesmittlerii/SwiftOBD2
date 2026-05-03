@@ -48,6 +48,10 @@ object Parser {
             
             if (type != null && header.length == 3) {
                 // CAN Frame
+                if (bytes.size < 6 || bytes.size > 12) {
+                    obdError("Invalid frame size: ${bytes.size} bytes", LogCategory.Parsing)
+                }
+
                 val dataLen = when (type) {
                     FrameType.SingleFrame -> typeByte and 0x0F
                     FrameType.FirstFrame -> ((typeByte and 0x0F) shl 8) or bytes[1]
@@ -56,6 +60,9 @@ object Parser {
                 val seqIndex = if (type == FrameType.ConsecutiveFrame) typeByte and 0x0F else 0
                 frames.add(Frame(canonicalRaw(header, bytes), bytes, type, dataLen, seqIndex))
             } else {
+                if (header.length == 3 && type == null) {
+                    obdError("Invalid frame type detected", LogCategory.Parsing)
+                }
                 // Legacy Frame (No PCI, just Mode + Data + Checksum)
                 // Swift LegacyParcer: dropFirst(3).dropLast()
                 // Our bytes already dropped the 3-byte header.
