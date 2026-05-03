@@ -109,4 +109,22 @@ class DecodersTest {
         assertEquals(7, result.value.dtcCount)
         assertTrue(result.value.monitors.isNotEmpty())
     }
+
+    @Test
+    fun testMode1RpmDecodeAcceptsServiceStrippedPayload() {
+        val result = OBDCommand.Mode1("0C").properties.decode(listOf(0x0C, 0x2D, 0xD3))
+
+        assertTrue(result is DecodeResult.Measurement)
+        assertEquals(2932.75, result.value.value, 0.01)
+        assertEquals("RPM", result.value.unit)
+    }
+
+    @Test
+    fun testMode1SpeedUsesUasSpeedDecoder() {
+        val result = OBDCommand.Mode1("0D").properties.decode(listOf(0x41, 0x0D, 0x2D))
+
+        assertTrue(result is DecodeResult.Measurement)
+        assertEquals(45.0, result.value.value, 0.01)
+        assertEquals("km/h", result.value.unit)
+    }
 }

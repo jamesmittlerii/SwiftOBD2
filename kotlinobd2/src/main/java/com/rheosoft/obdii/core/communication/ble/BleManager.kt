@@ -5,9 +5,12 @@ import com.rheosoft.obdii.core.OBDServiceDelegate
 import com.rheosoft.obdii.core.PeripheralInfo
 import com.rheosoft.obdii.core.protocols.CommProtocol
 import com.rheosoft.obdii.core.protocols.CommunicationError
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class BleManager(
     private val adapter: BlePlatformAdapter = UnsupportedBleAdapter(),
@@ -40,7 +43,9 @@ class BleManager(
 
     override fun disconnectPeripheral() {
         connectedPeripheral?.let { peripheral ->
-            runCatching { kotlinx.coroutines.runBlocking { adapter.disconnect(peripheral.id) } }
+            CoroutineScope(Dispatchers.Main).launch {
+                runCatching { adapter.disconnect(peripheral.id) }
+            }
         }
         connectedPeripheral = null
         peripheralManager.reset()
@@ -61,16 +66,16 @@ class BleManager(
         }
         var lastConnectError: Throwable? = null
         var connected = false
-        for (attempt in 0 until 2) {
+        for (attempt in 0 until 3) {
             try {
                 adapter.connect(target.id, timeoutMs = timeoutMs)
                 connected = true
                 break
             } catch (t: Throwable) {
                 lastConnectError = t
-                // Android BLE can intermittently fail first connect with GATT 133; retry once.
+                // Android BLE can intermittently fail early connects with GATT 133.
                 runCatching { adapter.disconnect(target.id) }
-                if (attempt == 0) delay(600)
+                if (attempt < 2) delay(800)
             }
         }
         if (!connected && lastConnectError != null) {

@@ -21,8 +21,8 @@ object Parser {
             if (trimmed.isEmpty() || trimmed.contains("SEARCHING") || trimmed.contains("NO DATA") || trimmed.contains("OK") || trimmed.contains("ELM")) {
                 continue
             }
-            
-            val tokens = trimmed.split(Regex("\\s+"))
+
+            val tokens = tokenizeResponseLine(trimmed)
             val bytes = mutableListOf<Int>()
             var header = ""
             
@@ -54,7 +54,7 @@ object Parser {
                     else -> null
                 }
                 val seqIndex = if (type == FrameType.ConsecutiveFrame) typeByte and 0x0F else 0
-                frames.add(Frame(trimmed, bytes, type, dataLen, seqIndex))
+                frames.add(Frame(canonicalRaw(header, bytes), bytes, type, dataLen, seqIndex))
             } else {
                 // Legacy Frame (No PCI, just Mode + Data + Checksum)
                 // Swift LegacyParcer: dropFirst(3).dropLast()
@@ -69,6 +69,29 @@ object Parser {
         }
         return frames
     }
+
+    private fun tokenizeResponseLine(line: String): List<String> {
+        val spaced = line.split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (spaced.size > 1) return spaced
+
+        val compact = line.replace(" ", "")
+        if (compact.length < 2 || !compact.all { it in '0'..'9' || it in 'A'..'F' }) {
+            return spaced
+        }
+
+        val hasCanHeader = compact.length >= 5 && (compact.length - 3) % 2 == 0
+        val start = if (hasCanHeader) 3 else 0
+        if (!hasCanHeader && compact.length % 2 != 0) return spaced
+        val tokens = mutableListOf<String>()
+        if (hasCanHeader) tokens += compact.take(3)
+        for (i in start until compact.length step 2) {
+            tokens += compact.substring(i, i + 2)
+        }
+        return tokens
+    }
+
+    private fun canonicalRaw(header: String, bytes: List<Int>): String =
+        "$header ${bytes.joinToString(" ") { "%02X".format(it) }}"
 
     fun parseMessages(frames: List<Frame>): List<Message> {
         if (frames.isEmpty()) return emptyList()

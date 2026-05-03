@@ -13,6 +13,7 @@ DerivedData/
 **/.packages
 **/build/
 **/.gradle/
+**/.kotlin/
 
 # Flutter test/build generated assets
 **/pubspec.lock

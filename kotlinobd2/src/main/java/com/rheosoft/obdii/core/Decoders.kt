@@ -53,11 +53,7 @@ enum class Decoders {
                 decoderMap.containsKey("dtc") -> Dtc
                 decoderMap.containsKey("fuelStatus") -> FuelStatus
                 decoderMap.containsKey("status") -> Status
-                decoderMap.containsKey("uas") -> {
-                    val uas = decoderMap["uas"] as? Map<*, *>
-                    val id = uas?.get("_0") as? Double
-                    if (id == 30.0) Lambda else Voltage // Approximate
-                }
+                decoderMap.containsKey("uas") -> None
                 else -> fromDescription(row.description)
             }
         }
@@ -77,6 +73,90 @@ enum class Decoders {
                 else -> None
             }
         }
+    }
+}
+
+private data class UasSpec(
+    val signed: Boolean,
+    val scale: Double,
+    val unit: String,
+    val offset: Double = 0.0,
+)
+
+private val uasSpecs: Map<Int, UasSpec> = mapOf(
+    0x01 to UasSpec(false, 1.0, "count"),
+    0x02 to UasSpec(false, 0.1, "count"),
+    0x03 to UasSpec(false, 0.01, "count"),
+    0x04 to UasSpec(false, 0.001, "count"),
+    0x05 to UasSpec(false, 0.0000305, "count"),
+    0x06 to UasSpec(false, 0.000305, "count"),
+    0x07 to UasSpec(false, 0.25, "RPM"),
+    0x09 to UasSpec(false, 1.0, "km/h"),
+    0x0A to UasSpec(false, 0.122, "mV"),
+    0x0B to UasSpec(false, 0.001, "V"),
+    0x10 to UasSpec(false, 1.0, "ms"),
+    0x11 to UasSpec(false, 100.0, "ms"),
+    0x12 to UasSpec(false, 1.0, "s"),
+    0x13 to UasSpec(false, 1.0, "microohms"),
+    0x14 to UasSpec(false, 1.0, "ohms"),
+    0x15 to UasSpec(false, 1.0, "kiloohms"),
+    0x16 to UasSpec(false, 0.1, "°C", -40.0),
+    0x17 to UasSpec(false, 0.01, "kPa"),
+    0x18 to UasSpec(false, 0.0117, "kPa"),
+    0x19 to UasSpec(false, 0.079, "kPa"),
+    0x1A to UasSpec(false, 1.0, "kPa"),
+    0x1B to UasSpec(false, 10.0, "kPa"),
+    0x1C to UasSpec(false, 0.01, "°"),
+    0x1D to UasSpec(false, 0.5, "°"),
+    0x1E to UasSpec(false, 0.0000305, "lambda"),
+    0x1F to UasSpec(false, 0.05, "lambda"),
+    0x20 to UasSpec(false, 0.00390625, "lambda"),
+    0x21 to UasSpec(false, 1.0, "mHz"),
+    0x22 to UasSpec(false, 1.0, "Hz"),
+    0x23 to UasSpec(false, 1.0, "kHz"),
+    0x24 to UasSpec(false, 1.0, "count"),
+    0x25 to UasSpec(false, 1.0, "km"),
+    0x27 to UasSpec(false, 0.01, "g/s"),
+    0x81 to UasSpec(true, 1.0, "count"),
+    0x82 to UasSpec(true, 0.1, "count"),
+    0x83 to UasSpec(true, 0.01, "count"),
+    0x84 to UasSpec(true, 0.001, "count"),
+    0x85 to UasSpec(true, 0.0000305, "count"),
+    0x86 to UasSpec(true, 0.000305, "count"),
+    0x87 to UasSpec(true, 1.0, "ppm"),
+    0x8A to UasSpec(true, 0.122, "mV"),
+    0x8B to UasSpec(true, 0.001, "V"),
+    0x8C to UasSpec(true, 0.01, "V"),
+    0x8D to UasSpec(true, 0.00390625, "mA"),
+    0x8E to UasSpec(true, 0.001, "A"),
+    0x90 to UasSpec(true, 1.0, "ms"),
+    0x96 to UasSpec(true, 0.1, "°C"),
+    0x99 to UasSpec(true, 0.1, "kPa"),
+    0xFC to UasSpec(true, 0.01, "kPa"),
+    0xFD to UasSpec(true, 0.001, "kPa"),
+    0xFE to UasSpec(true, 0.25, "Pa"),
+)
+
+class UasDecoder(private val id: Int) : Decoder {
+    override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
+        val spec = uasSpecs[id] ?: return DecodeResult.Failure("Unsupported UAS id: $id")
+        if (data.isEmpty()) return DecodeResult.Failure("Insufficient data")
+
+        val bitWidth = data.size * 8
+        var intValue = data.fold(0L) { acc, byte -> (acc shl 8) or (byte and 0xFF).toLong() }
+        if (spec.signed) {
+            val signBit = 1L shl (bitWidth - 1)
+            if (intValue and signBit != 0L) {
+                intValue -= 1L shl bitWidth
+            }
+        }
+
+        return DecodeResult.Measurement(
+            MeasurementResult(
+                value = intValue.toDouble() * spec.scale + spec.offset,
+                unit = spec.unit,
+            ),
+        )
     }
 }
 

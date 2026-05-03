@@ -281,7 +281,7 @@ class Obd2Service implements ObdServiceDelegate {
     MeasurementUnit unit = MeasurementUnit.metric,
     Duration interval = const Duration(seconds: 1),
   }) async* {
-    final commandsToRun = pids ?? _pidList;
+    final commandsToRun = List<ObdCommand>.of(pids ?? _pidList);
     var currentIntervalMs = interval.inMilliseconds;
     final minIntervalMs = currentIntervalMs < 200 ? 200 : currentIntervalMs;
     final maxIntervalMs = (interval.inMilliseconds * 4) > 2000 ? (interval.inMilliseconds * 4) : 2000;

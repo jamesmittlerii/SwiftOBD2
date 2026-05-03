@@ -111,14 +111,15 @@ class Elm327 {
       await Future.delayed(const Duration(milliseconds: 300));
 
       await sendCommand("ATE0");
-      await sendCommand("ATCRA7E8");
       await _okResponse("ATS0");
       await _okResponse("ATL0");
       await _okResponse("ATH1");
       await _okResponse("ATSP0");
       await _okResponse("ATAT1");
       await _okResponse("ATAL");
-      await _okResponse("ATST0A");
+      // Keep startup detection tolerant. Some vehicles need more than the
+      // aggressive 40 ms ATST0A timeout while the ELM is finding a protocol.
+      await _okResponse("ATST64");
     } catch (e) {
       throw Elm327Error.adapterInitializationFailed;
     }

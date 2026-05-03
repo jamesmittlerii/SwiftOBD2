@@ -166,10 +166,10 @@ class Commands {
       case 'encoded_string':
         return StringDecoder();
       case 'uas':
-        final offset = payload is Map<String, dynamic>
+        final uasId = payload is Map<String, dynamic>
             ? (payload['_0'] as num?)?.toInt() ?? 0
             : 0;
-        return UasDecoder(offset);
+        return UasDecoder(uasId);
       case 'GMoilPressure':
         return GMEngineOilPressureDecoder();
       case 'GMACPressure':

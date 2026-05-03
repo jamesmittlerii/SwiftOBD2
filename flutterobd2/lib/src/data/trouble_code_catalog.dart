@@ -10,7 +10,7 @@ class TroubleCodeCatalog {
 
   static Future<void> ensureLoaded() async {
     if (_loaded) return;
-    final raw = await rootBundle.loadString('packages/flutter_obd2/lib/src/data/codes.json');
+    final raw = await _loadCatalogJson();
     final json = jsonDecode(raw) as Map<String, dynamic>;
     final causes = (json['causes'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList();
     final remedies = (json['remedies'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList();
@@ -38,6 +38,16 @@ class TroubleCodeCatalog {
   }
 
   static TroubleCodeMetadata? lookup(String code) => _entries[code];
+
+  static Future<String> _loadCatalogJson() async {
+    const packagePath = 'packages/flutter_obd2/lib/src/data/codes.json';
+    const localPath = 'lib/src/data/codes.json';
+    try {
+      return await rootBundle.loadString(packagePath);
+    } catch (_) {
+      return await rootBundle.loadString(localPath);
+    }
+  }
 
   static String _determineSeverity(String code) {
     const criticalCodes = {'P0087', 'P0088', 'P0217', 'P0218', 'P0219', 'P0234', 'P0606'};

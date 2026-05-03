@@ -16,6 +16,16 @@ class ParserTest {
     }
 
     @Test
+    fun testCompactSingleFrameInitialization() {
+        val raw = listOf("7E8064100BE3FA81300")
+        val frames = Parser.parseFrames(raw)
+        assertEquals(1, frames.size)
+        assertEquals(FrameType.SingleFrame, frames[0].type)
+        assertEquals(6, frames[0].dataLen)
+        assertEquals(listOf(0x06, 0x41, 0x00, 0xBE, 0x3F, 0xA8, 0x13, 0x00), frames[0].data)
+    }
+
+    @Test
     fun testMultiFrameInitialization() {
         val raw = listOf("7E8 10 3E 00 00 00 00 00 00")
         val frames = Parser.parseFrames(raw)

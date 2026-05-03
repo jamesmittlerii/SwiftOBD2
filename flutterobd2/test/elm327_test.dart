@@ -35,10 +35,9 @@ class FakeComm implements CommProtocol {
       case "ATH1":
       case "ATAT1":
       case "ATAL":
-      case "ATST0A":
+      case "ATST64":
         return ["OK"];
       case "ATZ":
-      case "ATCRA7E8":
         return ["ELM327"];
       case "ATDPN":
         return ["A6"];
@@ -62,6 +61,11 @@ void main() {
       final sut = Elm327(FakeComm());
       final info = await sut.setupVehicle(preferredProtocol: null, querySupportedPIDs: false);
       expect(info.obdProtocol, ObdProtocol.protocol6);
+    });
+
+    test('adapterInitialization uses tolerant startup settings', () async {
+      final sut = Elm327(FakeComm());
+      await sut.adapterInitialization();
     });
 
     test('getSupportedPIDs returns values from 0100 bitmap', () async {

@@ -11,9 +11,11 @@ data class CommandProperties(
     val live: Boolean = false,
     val maxValue: Double = 100.0,
     val minValue: Double = 0.0,
+    val uasId: Int? = null,
 ) {
     fun decode(data: List<Int>, unit: MeasurementUnit = MeasurementUnit.Metric): DecodeResult {
-        val decoderInstance = decoder.getDecoder() ?: return DecodeResult.Failure("No decoder found for $command")
+        val decoderInstance = uasId?.let(::UasDecoder) ?: decoder.getDecoder()
+            ?: return DecodeResult.Failure("No decoder found for $command")
         
         // Strip headers and protocol-specific bytes
         val serviceByte = when {
@@ -35,6 +37,8 @@ data class CommandProperties(
                 } else {
                     data.drop(idx + 1)
                 }
+            } else if (command.startsWith("01") && data.firstOrNull() == command.takeLast(2).toIntOrNull(16)) {
+                data.drop(1)
             } else data
         } else data
         
@@ -68,6 +72,7 @@ private fun CommandCatalog.CommandRow.toCommandProperties(): CommandProperties {
         decoder = Decoders.fromCommand(this),
         live = this.live,
         maxValue = this.maxValue,
-        minValue = this.minValue
+        minValue = this.minValue,
+        uasId = (decoder?.get("uas") as? Map<*, *>)?.get("_0")?.let { (it as? Number)?.toInt() },
     )
 }
