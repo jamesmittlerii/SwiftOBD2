@@ -151,12 +151,31 @@ class UasDecoder(private val id: Int) : Decoder {
             }
         }
 
+        val baseValue = intValue.toDouble() * spec.scale + spec.offset
+        
+        if (unit == MeasurementUnit.Imperial) {
+            val (convValue, convUnit) = convertToImperial(baseValue, spec.unit)
+            return DecodeResult.Measurement(MeasurementResult(convValue, convUnit))
+        }
+
         return DecodeResult.Measurement(
             MeasurementResult(
-                value = intValue.toDouble() * spec.scale + spec.offset,
+                value = baseValue,
                 unit = spec.unit,
             ),
         )
+    }
+
+    private fun convertToImperial(value: Double, baseUnit: String): Pair<Double, String> {
+        return when (baseUnit) {
+            "°C" -> (value * 9.0 / 5.0 + 32.0) to "°F"
+            "km" -> (value * 0.621371) to "mi"
+            "km/h" -> (value * 0.621371) to "mph"
+            "kPa" -> (value * 0.145038) to "psi"
+            "g/s" -> (value * 0.132277) to "lb/min"
+            "L/h" -> (value * 0.264172) to "gal/h"
+            else -> value to baseUnit
+        }
     }
 }
 
@@ -164,7 +183,11 @@ class TemperatureDecoder : Decoder {
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
         if (data.isEmpty()) return DecodeResult.Failure("Insufficient data")
         val celsius = data[0] - 40.0
-        return DecodeResult.Measurement(MeasurementResult(celsius, "°C"))
+        return if (unit == MeasurementUnit.Imperial) {
+            DecodeResult.Measurement(MeasurementResult((celsius * 9.0 / 5.0) + 32.0, "°F"))
+        } else {
+            DecodeResult.Measurement(MeasurementResult(celsius, "°C"))
+        }
     }
 }
 
@@ -195,8 +218,12 @@ class VoltageDecoder : Decoder {
 class SpeedDecoder : Decoder {
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
         if (data.isEmpty()) return DecodeResult.Failure("Insufficient data")
-        val speed = data[0].toDouble()
-        return DecodeResult.Measurement(MeasurementResult(speed, "km/h"))
+        val kmh = data[0].toDouble()
+        return if (unit == MeasurementUnit.Imperial) {
+            DecodeResult.Measurement(MeasurementResult(kmh * 0.621371, "mph"))
+        } else {
+            DecodeResult.Measurement(MeasurementResult(kmh, "km/h"))
+        }
     }
 }
 
