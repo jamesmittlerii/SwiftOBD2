@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:collection/collection.dart';
 
 import 'comm_protocol.dart';
