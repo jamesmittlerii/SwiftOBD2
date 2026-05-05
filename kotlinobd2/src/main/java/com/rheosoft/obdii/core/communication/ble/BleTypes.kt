@@ -24,3 +24,13 @@ val supportedBleServiceUuids: Set<String> = setOf(
     "FFC0",
     "6E400001B5A3F393E0A9E50E24DCCA9E",
 )
+
+@Suppress("SpellCheckingInspection")
+val commonObdDeviceNames: List<String> = listOf(
+    "OBD",
+    "ELM",
+    "VLINK",
+    "VGATE",
+    "BAFX",
+    "KONNWEI",
+)
