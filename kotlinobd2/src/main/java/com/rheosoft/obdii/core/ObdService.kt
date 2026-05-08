@@ -43,6 +43,12 @@ class ObdService(
     }
 
     fun switchConnectionType(type: LibraryConnectionType, host: String? = null, port: Int? = null) {
+        val sameHost = host == null || host == wifiHost
+        val samePort = port == null || port == wifiPort
+        if (type == _connectionType.value && sameHost && samePort) {
+            return
+        }
+
         if (host != null) wifiHost = host
         if (port != null) wifiPort = port
         elm327.stopConnection()
@@ -51,6 +57,7 @@ class ObdService(
     }
 
     fun setBleAdapter(adapter: BlePlatformAdapter) {
+        if (bleAdapter === adapter) return
         bleAdapter = adapter
         if (_connectionType.value == LibraryConnectionType.bluetooth) {
             elm327.stopConnection()
