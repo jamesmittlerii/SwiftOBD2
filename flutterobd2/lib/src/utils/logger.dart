@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 typedef ObdLogHandler = void Function(String message, {String level, String category});
 
 class ObdLog {
   static ObdLogHandler? _handler;
+  static bool enableConsoleOutput = !Platform.environment.containsKey('FLUTTER_TEST');
 
   static void setHandler(ObdLogHandler handler) {
     _handler = handler;
@@ -28,7 +30,7 @@ class ObdLog {
   static void _log(String message, {required String level, required String category}) {
     if (_handler != null) {
       _handler!(message, level: level, category: category);
-    } else {
+    } else if (enableConsoleOutput) {
       debugPrint('[$level $category] $message');
     }
   }

@@ -12,26 +12,33 @@ class TroubleCodeCatalog {
     if (_loaded) return;
     final raw = await _loadCatalogJson();
     final json = jsonDecode(raw) as Map<String, dynamic>;
-    final causes = (json['causes'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList();
-    final remedies = (json['remedies'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList();
+
+    List<String> parseList(String key) =>
+        (json[key] as List<dynamic>? ?? const []).map((e) => e.toString()).toList();
+
+    final causes = parseList('causes');
+    final remedies = parseList('remedies');
     final codes = json['codes'] as Map<String, dynamic>? ?? const {};
 
     _entries.clear();
     codes.forEach((code, value) {
       final info = value as Map<String, dynamic>;
-      final causeIdx = (info['causeIndexes'] as List<dynamic>? ?? const [])
-          .map((e) => e as int)
-          .toList();
-      final remedyIdx = (info['remedyIndexes'] as List<dynamic>? ?? const [])
-          .map((e) => e as int)
-          .toList();
+
+      List<String> mapIndexes(String key, List<String> source) {
+        final indexes = (info[key] as List<dynamic>? ?? const []).map((e) => e as int);
+        return indexes
+            .map((i) => i >= 0 && i < source.length ? source[i] : null)
+            .whereType<String>()
+            .toList();
+      }
+
       _entries[code] = TroubleCodeMetadata(
         code: code,
         title: (info['title'] as String?) ?? '',
         description: (info['description'] as String?) ?? '',
         severity: _determineSeverity(code),
-        causes: causeIdx.map((i) => i >= 0 && i < causes.length ? causes[i] : null).whereType<String>().toList(),
-        remedies: remedyIdx.map((i) => i >= 0 && i < remedies.length ? remedies[i] : null).whereType<String>().toList(),
+        causes: mapIndexes('causeIndexes', causes),
+        remedies: mapIndexes('remedyIndexes', remedies),
       );
     });
     _loaded = true;
