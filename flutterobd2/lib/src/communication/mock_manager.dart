@@ -4,10 +4,13 @@ import 'dart:math';
 import '../comm_protocol.dart';
 
 class MockManager implements CommProtocol {
+  static const _noData = "NO DATA";
+
   final _stateController = StreamController<ConnectionState>.broadcast();
 
   @override
-  Stream<ConnectionState> get connectionStatePublisher => _stateController.stream;
+  Stream<ConnectionState> get connectionStatePublisher =>
+      _stateController.stream;
 
   @override
   ObdServiceDelegate? obdDelegate;
@@ -23,7 +26,8 @@ class MockManager implements CommProtocol {
   Future<void> _lock = Future.value();
 
   @override
-  Future<void> connectAsync({required double timeout, Object? peripheral}) async {
+  Future<void> connectAsync(
+      {required double timeout, Object? peripheral}) async {
     _connected = true;
     _emit(ConnectionState.connectedToAdapter);
   }
@@ -51,7 +55,7 @@ class MockManager implements CommProtocol {
       if (!_connected) {
         throw Exception("Mock adapter not connected");
       }
-      
+
       final result = await _executeCommand(message, retries: retries);
       completer.complete(result);
     } catch (e) {
@@ -63,51 +67,80 @@ class MockManager implements CommProtocol {
     return completer.future;
   }
 
-  Future<List<String>> _executeCommand(String message, {int retries = 3}) async {
+  Future<List<String>> _executeCommand(String message,
+      {int retries = 3}) async {
     if (!_connected) {
       throw Exception("Mock adapter not connected");
     }
 
-    if (message.startsWith("AT")) {
-      final action = message.substring(2);
-      if (action == "H1") {
-        _headerOn = true;
-        return _reply("OK", message);
-      }
-      if (action == "H0") {
-        _headerOn = false;
-        return _reply("OK", message);
-      }
-      if (action == "E1") {
-        _echoOn = true;
-        return _reply("OK", message);
-      }
-      if (action == "E0") {
-        _echoOn = false;
-        return _reply("OK", message);
-      }
-      if (action == "Z") return _reply("ELM327 v1.5", message);
-      if (action == "DPN") return ["06"];
-      if (action == "RV") {
-        final v = (13.6 + _smoothNoise(seed: 1.0, scale: 0.15)).clamp(12.2, 14.6);
-        return _reply(v.toStringAsFixed(2), message);
-      }
-      if (action.startsWith("ST")) {
-        final tail = action.substring(2);
-        final parsed = int.tryParse(tail, radix: 16);
-        return _reply(parsed == null ? "NO DATA" : "OK", message);
-      }
+    final prefixHandler = _prefixedCommandHandler(message);
+    if (prefixHandler != null) return prefixHandler(message);
+
+    switch (message) {
+      case "0902":
+        return [
+          _frame("10 14 49 02 01 31 4E 34"),
+          _frame("21 41 4C 33 41 50 37 44"),
+          _frame("22 43 31 39 39 35 38 33"),
+        ];
+      case "03":
+        return [
+          _frame("10 10 43 07 03 00 01 70"),
+          _frame("21 01 01 01 04 02 07 04"),
+          _frame("22 11 04 20 00 00 00 00"),
+        ];
+      case "04":
+        return _reply("44", message);
+      default:
+        return _reply(_noData, message);
+    }
+  }
+
+  List<String> Function(String)? _prefixedCommandHandler(String message) {
+    if (message.startsWith("AT")) return _handleAtCommand;
+    if (message.startsWith("01")) return _handleMode1Command;
+    return null;
+  }
+
+  List<String> _handleAtCommand(String message) {
+    final action = message.substring(2);
+    if (action == "H1") {
+      _headerOn = true;
       return _reply("OK", message);
     }
+    if (action == "H0") {
+      _headerOn = false;
+      return _reply("OK", message);
+    }
+    if (action == "E1") {
+      _echoOn = true;
+      return _reply("OK", message);
+    }
+    if (action == "E0") {
+      _echoOn = false;
+      return _reply("OK", message);
+    }
+    if (action == "Z") return _reply("ELM327 v1.5", message);
+    if (action == "DPN") return ["06"];
+    if (action == "RV") {
+      final v = (13.6 + _smoothNoise(seed: 1.0, scale: 0.15)).clamp(12.2, 14.6);
+      return _reply(v.toStringAsFixed(2), message);
+    }
+    if (action.startsWith("ST")) {
+      final tail = action.substring(2);
+      final parsed = int.tryParse(tail, radix: 16);
+      return _reply(parsed == null ? _noData : "OK", message);
+    }
+    return _reply("OK", message);
+  }
 
+  List<String> _handleMode1Command(String message) {
     switch (message) {
       case "0100":
         return [_frame("06 41 00 FF FF FF FF")];
       case "0120":
-        // Mirrors Swift mock: full support bitmap for 0x21-0x40 range.
         return [_frame("06 41 20 FF FF FF FF")];
       case "0140":
-        // Mirrors Swift mock intent: support broad 0x41-0x60 coverage.
         return [_frame("06 41 40 FF FF FF FE")];
       case "010C":
         return [_frame("04 41 0C ${_rpmBytes()}")];
@@ -150,7 +183,9 @@ class MockManager implements CommProtocol {
       case "0107":
       case "0108":
       case "0109":
-        return [_frame("03 41 ${message.substring(2)} ${_fuelTrimByte(message)}")];
+        return [
+          _frame("03 41 ${message.substring(2)} ${_fuelTrimByte(message)}")
+        ];
       case "0114":
       case "0115":
       case "0118":
@@ -160,7 +195,9 @@ class MockManager implements CommProtocol {
       case "013D":
       case "013E":
       case "013F":
-        return [_frame("04 41 ${message.substring(2)} ${_catTempBytes(message)}")];
+        return [
+          _frame("04 41 ${message.substring(2)} ${_catTempBytes(message)}")
+        ];
       case "0144":
         return [_frame("04 41 44 ${_lambdaBytes()}")];
       case "0145":
@@ -172,7 +209,10 @@ class MockManager implements CommProtocol {
       case "014C":
       case "015A":
       case "015B":
-        return [_frame("03 41 ${message.substring(2)} ${_relativeThrottleByte(message)}")];
+        return [
+          _frame(
+              "03 41 ${message.substring(2)} ${_relativeThrottleByte(message)}")
+        ];
       case "011F":
         return [_frame("04 41 1F ${_runtimeBytes()}")];
       case "0121":
@@ -182,22 +222,8 @@ class MockManager implements CommProtocol {
         return [_frame("03 41 2E ${_evapPurgeByte()}")];
       case "012C":
         return [_frame("03 41 2C ${_egrByte()}")];
-      case "0902":
-        return [
-          _frame("10 14 49 02 01 31 4E 34"),
-          _frame("21 41 4C 33 41 50 37 44"),
-          _frame("22 43 31 39 39 35 38 33"),
-        ];
-      case "03":
-        return [
-          _frame("10 10 43 07 03 00 01 70"),
-          _frame("21 01 01 01 04 02 07 04"),
-          _frame("22 11 04 20 00 00 00 00"),
-        ];
-      case "04":
-        return _reply("44", message);
       default:
-        return _reply("NO DATA", message);
+        return _reply(_noData, message);
     }
   }
 
@@ -253,7 +279,8 @@ class MockManager implements CommProtocol {
                 ? 1500.0 + (6500.0 / 30.0) * (speed - 20.0)
                 : 1800.0 + 310.0 * (speed - 50.0);
     final raw = (rpm.clamp(800.0, 8000.0).round()) * 4;
-    final a = ((raw >> 8) & 0xFF).toRadixString(16).padLeft(2, '0').toUpperCase();
+    final a =
+        ((raw >> 8) & 0xFF).toRadixString(16).padLeft(2, '0').toUpperCase();
     final b = (raw & 0xFF).toRadixString(16).padLeft(2, '0').toUpperCase();
     return "$a $b";
   }
@@ -346,7 +373,8 @@ class MockManager implements CommProtocol {
     final speed = _speedKmh();
     final rpm = _rpmFromSpeed(speed);
     final rpmN = ((rpm - 800.0) / (8000.0 - 800.0)).clamp(0.0, 1.0);
-    final load = (0.1 + 0.8 * rpmN + sin(_elapsedSeconds * 0.2) * 0.03).clamp(0.0, 1.0);
+    final load =
+        (0.1 + 0.8 * rpmN + sin(_elapsedSeconds * 0.2) * 0.03).clamp(0.0, 1.0);
     return _hexByte(load * 255.0);
   }
 
@@ -363,14 +391,16 @@ class MockManager implements CommProtocol {
     final speed = _speedKmh();
     final rpm = _rpmFromSpeed(speed);
     final rpmN = ((rpm - 800.0) / (8000.0 - 800.0)).clamp(0.0, 1.0);
-    final kpa = (25.0 + rpmN * 70.0 + sin(_elapsedSeconds * 0.17) * 2.0).clamp(20.0, 100.0);
+    final kpa = (25.0 + rpmN * 70.0 + sin(_elapsedSeconds * 0.17) * 2.0)
+        .clamp(20.0, 100.0);
     return _hexByte(kpa);
   }
 
   String _mafBytes() {
     final speed = _speedKmh();
     final rpm = _rpmFromSpeed(speed);
-    final rpmN = ((rpm - 800.0) / (8000.0 - 8000.0 + 8000.0 - 800.0)).clamp(0.0, 1.0);
+    final rpmN =
+        ((rpm - 800.0) / (8000.0 - 8000.0 + 8000.0 - 800.0)).clamp(0.0, 1.0);
     final maf = (2.0 + rpmN * 118.0).clamp(2.0, 200.0);
     final raw = (maf * 100.0).round();
     return "${_hexByte((raw >> 8) & 0xFF)} ${_hexByte(raw & 0xFF)}";
@@ -384,7 +414,8 @@ class MockManager implements CommProtocol {
     return _hexByte((advance * 2.0) + 128.0);
   }
 
-  String _baroPressureByte() => _hexByte((101.0 + sin(_elapsedSeconds * 0.01)).clamp(95.0, 105.0));
+  String _baroPressureByte() =>
+      _hexByte((101.0 + sin(_elapsedSeconds * 0.01)).clamp(95.0, 105.0));
 
   String _fuelPressureByte() => _hexByte((400.0 / 3.0).clamp(0.0, 255.0));
 
@@ -396,14 +427,17 @@ class MockManager implements CommProtocol {
 
   String _o2Bytes(String command) {
     final seed = int.parse(command.substring(2), radix: 16).toDouble();
-    final v = (0.5 + sin((_elapsedSeconds + seed) * 0.4) * 0.25).clamp(0.1, 0.9);
+    final v =
+        (0.5 + sin((_elapsedSeconds + seed) * 0.4) * 0.25).clamp(0.1, 0.9);
     final a = ((v / 1.275) * 255.0).round();
     return "${_hexByte(a)} 80";
   }
 
   String _catTempBytes(String command) {
     final seed = int.parse(command.substring(2), radix: 16).toDouble();
-    final temp = (300.0 + 250.0 * (0.5 + 0.5 * sin((_elapsedSeconds + seed) * 0.1))).clamp(200.0, 900.0);
+    final temp =
+        (300.0 + 250.0 * (0.5 + 0.5 * sin((_elapsedSeconds + seed) * 0.1)))
+            .clamp(200.0, 900.0);
     final raw = ((temp + 40.0) * 10.0).round();
     return "${_hexByte((raw >> 8) & 0xFF)} ${_hexByte(raw & 0xFF)}";
   }
@@ -418,7 +452,9 @@ class MockManager implements CommProtocol {
     final speed = _speedKmh();
     final base = (0.2 + ((speed / 120.0).clamp(0.0, 1.0))).clamp(0.0, 1.0);
     final seed = int.parse(command.substring(2), radix: 16).toDouble();
-    return _hexByte(((base + sin((_elapsedSeconds + seed) * 0.05) * 0.02).clamp(0.0, 1.0)) * 255.0);
+    return _hexByte(
+        ((base + sin((_elapsedSeconds + seed) * 0.05) * 0.02).clamp(0.0, 1.0)) *
+            255.0);
   }
 
   String _runtimeBytes() {
@@ -428,23 +464,28 @@ class MockManager implements CommProtocol {
   }
 
   String _distanceBytes() {
-    final km = (_speedKmh() * (_elapsedSeconds / 3600.0)).round().clamp(0, 65535);
+    final km =
+        (_speedKmh() * (_elapsedSeconds / 3600.0)).round().clamp(0, 65535);
     return "${_hexByte((km >> 8) & 0xFF)} ${_hexByte(km & 0xFF)}";
   }
 
-  String _evapPurgeByte() => _hexByte((0.2 + 0.2 * sin(_elapsedSeconds * 0.2)) * 255.0);
+  String _evapPurgeByte() =>
+      _hexByte((0.2 + 0.2 * sin(_elapsedSeconds * 0.2)) * 255.0);
 
-  String _egrByte() => _hexByte((0.2 + 0.2 * sin(_elapsedSeconds * 0.3)) * 255.0);
+  String _egrByte() =>
+      _hexByte((0.2 + 0.2 * sin(_elapsedSeconds * 0.3)) * 255.0);
 
   String _voltageBytes() {
     _tick();
-    final volts = (13.6 + _smoothNoise(seed: 1.0, scale: 0.15)).clamp(12.2, 14.6);
+    final volts =
+        (13.6 + _smoothNoise(seed: 1.0, scale: 0.15)).clamp(12.2, 14.6);
     final raw = (volts * 1000.0).round();
     return "${_hexByte((raw >> 8) & 0xFF)} ${_hexByte(raw & 0xFF)}";
   }
 
   double _smoothNoise({required double seed, required double scale}) {
-    final n = sin((_elapsedSeconds + seed) * 0.2) * 0.6 + sin((_elapsedSeconds * 0.07) + seed * 3.1) * 0.4;
+    final n = sin((_elapsedSeconds + seed) * 0.2) * 0.6 +
+        sin((_elapsedSeconds * 0.07) + seed * 3.1) * 0.4;
     return n * scale;
   }
 
@@ -458,7 +499,12 @@ class MockManager implements CommProtocol {
                 : 1800.0 + 310.0 * (speed - 50.0);
   }
 
-  String _hexByte(num value) => value.round().clamp(0, 255).toRadixString(16).padLeft(2, '0').toUpperCase();
+  String _hexByte(num value) => value
+      .round()
+      .clamp(0, 255)
+      .toRadixString(16)
+      .padLeft(2, '0')
+      .toUpperCase();
 
   String _fuelLevelByte() {
     _tick();

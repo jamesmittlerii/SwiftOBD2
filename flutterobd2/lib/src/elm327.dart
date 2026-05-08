@@ -136,7 +136,8 @@ class Elm327 {
       {ObdProtocol? preferredProtocol, bool querySupportedPIDs = true}) async {
     ObdLog.info('Setting up vehicle...', category: 'Service');
     final detectedProtocol = await _detectProtocol(preferredProtocol);
-    ObdLog.info('Protocol detected: ${detectedProtocol.name}', category: 'Service');
+    ObdLog.info('Protocol detected: ${detectedProtocol.name}',
+        category: 'Service');
     canProtocol = CanProtocol(
         detectedProtocol); // Assume CAN for now, Swift code uses protocol map.
 
@@ -229,38 +230,52 @@ class Elm327 {
       return ecuMap;
     }
 
-    bool foundEngine = false;
-    for (var msg in messages) {
-      if (msg.ecu.value == 0) {
-        ecuMap[msg.ecu.value] = EcuId.engine;
-        foundEngine = true;
-      } else if (msg.ecu.value == 1) {
-        ecuMap[msg.ecu.value] = EcuId.transmission;
-      }
-    }
-
-    if (!foundEngine) {
-      int bestBits = 0;
-      int? bestTxId;
-      for (var msg in messages) {
-        final bits = (msg.data?.length ?? 0) * 8;
-        if (bits > bestBits) {
-          bestBits = bits;
-          bestTxId = msg.ecu.value;
-        }
-      }
-      if (bestTxId != null) {
-        ecuMap[bestTxId] = EcuId.engine;
-      }
-    }
-
-    for (var msg in messages) {
-      if (!ecuMap.containsKey(msg.ecu.value)) {
-        ecuMap[msg.ecu.value] = EcuId.transmission;
-      }
-    }
+    final foundEngine = _assignKnownEcus(messages, ecuMap);
+    if (!foundEngine) _assignMostCompleteEcuAsEngine(messages, ecuMap);
+    _assignRemainingEcus(messages, ecuMap);
 
     return ecuMap;
+  }
+
+  bool _assignKnownEcus(
+    List<ParsedMessage> messages,
+    Map<int, EcuId> ecuMap,
+  ) {
+    var foundEngine = false;
+    for (var msg in messages) {
+      final ecuValue = msg.ecu.value;
+      if (ecuValue == 0) {
+        ecuMap[ecuValue] = EcuId.engine;
+        foundEngine = true;
+      } else if (ecuValue == 1) {
+        ecuMap[ecuValue] = EcuId.transmission;
+      }
+    }
+    return foundEngine;
+  }
+
+  void _assignMostCompleteEcuAsEngine(
+    List<ParsedMessage> messages,
+    Map<int, EcuId> ecuMap,
+  ) {
+    final best = messages.fold<ParsedMessage?>(null, (current, msg) {
+      final currentBits = (current?.data?.length ?? 0) * 8;
+      final msgBits = (msg.data?.length ?? 0) * 8;
+      return msgBits > currentBits ? msg : current;
+    });
+    final bestTxId = best?.ecu.value;
+    if (bestTxId != null) {
+      ecuMap[bestTxId] = EcuId.engine;
+    }
+  }
+
+  void _assignRemainingEcus(
+    List<ParsedMessage> messages,
+    Map<int, EcuId> ecuMap,
+  ) {
+    for (var msg in messages) {
+      ecuMap.putIfAbsent(msg.ecu.value, () => EcuId.transmission);
+    }
   }
 
   Future<List<ObdCommand>> getSupportedPIDs() async {
@@ -374,8 +389,8 @@ class Elm327 {
       // Mode 3 response: [0x43, count, dtcA_hi, dtcA_lo, dtcB_hi, dtcB_lo, ...]
       // Strip the mode byte (0x43) AND the DTC count byte before decoding.
       if (raw.length < 2) continue;
-      final result = command.properties
-          .decode(raw.sublist(2), MeasurementUnit.metric);
+      final result =
+          command.properties.decode(raw.sublist(2), MeasurementUnit.metric);
       if (result != null && result.troubleCodes != null) {
         dtcs[message.ecu] = result.troubleCodes!;
       }

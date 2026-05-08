@@ -5,12 +5,23 @@ import '../comm_protocol.dart';
 import 'base_comm_protocol.dart';
 
 class BleManager extends BaseCommProtocol {
+  static const _obdServiceUuidHints = [
+    "FFE0",
+    "FFF0",
+    "18F0",
+    "FFC0",
+    "6E400001",
+  ];
+
   final _connectedPeripheralController = StreamController<Object?>.broadcast();
-  final _discoveredPeripheralsController = StreamController<List<Object>>.broadcast();
+  final _discoveredPeripheralsController =
+      StreamController<List<Object>>.broadcast();
   final List<BluetoothDevice> _discoveredPeripherals = [];
-  
-  Stream<Object?> get connectedPeripheralPublisher => _connectedPeripheralController.stream;
-  Stream<List<Object>> get discoveredPeripheralsPublisher => _discoveredPeripheralsController.stream;
+
+  Stream<Object?> get connectedPeripheralPublisher =>
+      _connectedPeripheralController.stream;
+  Stream<List<Object>> get discoveredPeripheralsPublisher =>
+      _discoveredPeripheralsController.stream;
 
   BluetoothDevice? _device;
   BluetoothCharacteristic? _writeCharacteristic;
@@ -19,7 +30,8 @@ class BleManager extends BaseCommProtocol {
   StreamSubscription? _connectionStateSub;
 
   @override
-  Future<void> connectAsync({required double timeout, Object? peripheral}) async {
+  Future<void> connectAsync(
+      {required double timeout, Object? peripheral}) async {
     setConnectionState(ConnectionState.connecting);
 
     if (peripheral is BluetoothDevice) {
@@ -40,7 +52,7 @@ class BleManager extends BaseCommProtocol {
         license: License.free,
         timeout: Duration(milliseconds: (timeout * 1000).toInt()),
       );
-      
+
       _connectionStateSub = _device!.connectionState.listen((state) {
         if (state == BluetoothConnectionState.disconnected) {
           setConnectionState(ConnectionState.disconnected);
@@ -91,36 +103,44 @@ class BleManager extends BaseCommProtocol {
     _discoveredPeripherals.clear();
     final sub = FlutterBluePlus.scanResults.listen((results) {
       for (final r in results) {
-        final exists = _discoveredPeripherals.any((d) => d.remoteId == r.device.remoteId);
+        final exists =
+            _discoveredPeripherals.any((d) => d.remoteId == r.device.remoteId);
         if (!exists) {
           _discoveredPeripherals.add(r.device);
         }
       }
-      _discoveredPeripheralsController.add(List<Object>.from(_discoveredPeripherals));
+      _discoveredPeripheralsController
+          .add(List<Object>.from(_discoveredPeripherals));
     });
     await FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
     await FlutterBluePlus.stopScan();
     await sub.cancel();
   }
 
-  Future<BluetoothDevice?> _scanForFirstObdDevice({required double timeout}) async {
+  Future<BluetoothDevice?> _scanForFirstObdDevice(
+      {required double timeout}) async {
     final completer = Completer<BluetoothDevice?>();
-    
+
     final subscription = FlutterBluePlus.scanResults.listen((results) {
       for (ScanResult r in results) {
         // Simple heuristic: just return the first device with OBD or V-LINK in its name
         final name = r.device.platformName.toLowerCase();
-        if (name.contains("obd") || name.contains("v-link") || name.contains("ble") || name.contains("ios")) {
+        if (name.contains("obd") ||
+            name.contains("v-link") ||
+            name.contains("ble") ||
+            name.contains("ios")) {
           completer.complete(r.device);
           break;
         }
       }
     });
 
-    await FlutterBluePlus.startScan(timeout: Duration(milliseconds: (timeout * 1000).toInt()));
+    await FlutterBluePlus.startScan(
+        timeout: Duration(milliseconds: (timeout * 1000).toInt()));
 
     try {
-      final device = await completer.future.timeout(Duration(milliseconds: (timeout * 1000).toInt()));
+      final device = await completer.future
+          .timeout(Duration(milliseconds: (timeout * 1000).toInt()));
       subscription.cancel();
       await FlutterBluePlus.stopScan();
       return device;
@@ -133,41 +153,18 @@ class BleManager extends BaseCommProtocol {
 
   Future<void> _setupCharacteristics() async {
     if (_device == null) return;
-    
+
     List<BluetoothService> services = await _device!.discoverServices();
-    
-    for (BluetoothService service in services) {
-      final uuidStr = service.uuid.toString().toUpperCase();
-      // Check common OBD BLE Service UUIDs
-      if (uuidStr.contains("FFE0") || uuidStr.contains("FFF0") || uuidStr.contains("18F0") || uuidStr.contains("FFC0") || uuidStr.contains("6E400001")) {
-        for (BluetoothCharacteristic c in service.characteristics) {
-          if (c.properties.write || c.properties.writeWithoutResponse) {
-            _writeCharacteristic = c;
-          }
-          if (c.properties.notify || c.properties.indicate) {
-            _readCharacteristic = c;
-          }
-        }
-        break; // found the service
-      }
-    }
 
-    // Fallback: Just find any characteristic that can write, and any that can notify
+    _findObdCharacteristics(services);
+
     if (_writeCharacteristic == null || _readCharacteristic == null) {
-      for (BluetoothService service in services) {
-        for (BluetoothCharacteristic c in service.characteristics) {
-          if (_writeCharacteristic == null && (c.properties.write || c.properties.writeWithoutResponse)) {
-            _writeCharacteristic = c;
-          }
-          if (_readCharacteristic == null && (c.properties.notify || c.properties.indicate)) {
-            _readCharacteristic = c;
-          }
-        }
-      }
+      _findFallbackCharacteristics(services);
     }
 
     if (_writeCharacteristic == null || _readCharacteristic == null) {
-      throw Exception("Could not find read/write characteristics on the device.");
+      throw Exception(
+          "Could not find read/write characteristics on the device.");
     }
 
     // Subscribe to notifications
@@ -178,6 +175,47 @@ class BleManager extends BaseCommProtocol {
       }
     });
   }
+
+  void _findObdCharacteristics(List<BluetoothService> services) {
+    for (BluetoothService service in services) {
+      if (_isObdService(service)) {
+        _assignCharacteristics(service.characteristics);
+        break;
+      }
+    }
+  }
+
+  void _findFallbackCharacteristics(List<BluetoothService> services) {
+    for (BluetoothService service in services) {
+      _assignCharacteristics(service.characteristics, onlyIfMissing: true);
+    }
+  }
+
+  bool _isObdService(BluetoothService service) {
+    final uuidStr = service.uuid.toString().toUpperCase();
+    return _obdServiceUuidHints.any(uuidStr.contains);
+  }
+
+  void _assignCharacteristics(
+    List<BluetoothCharacteristic> characteristics, {
+    bool onlyIfMissing = false,
+  }) {
+    for (BluetoothCharacteristic c in characteristics) {
+      if ((!onlyIfMissing || _writeCharacteristic == null) && _canWrite(c)) {
+        _writeCharacteristic = c;
+      }
+      if ((!onlyIfMissing || _readCharacteristic == null) && _canRead(c)) {
+        _readCharacteristic = c;
+      }
+    }
+  }
+
+  bool _canWrite(BluetoothCharacteristic characteristic) =>
+      characteristic.properties.write ||
+      characteristic.properties.writeWithoutResponse;
+
+  bool _canRead(BluetoothCharacteristic characteristic) =>
+      characteristic.properties.notify || characteristic.properties.indicate;
 
   void _processReceivedData(List<int> data) {
     try {

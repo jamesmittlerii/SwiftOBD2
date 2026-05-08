@@ -18,63 +18,74 @@ object Parser {
         val frames = mutableListOf<Frame>()
         for (line in lines) {
             val trimmed = line.trim().uppercase()
-            if (trimmed.isEmpty() || trimmed.contains("SEARCHING") || trimmed.contains("NO DATA") || trimmed.contains("OK") || trimmed.contains("ELM")) {
-                continue
-            }
+            if (shouldSkipLine(trimmed)) continue
 
             val tokens = tokenizeResponseLine(trimmed)
-            val bytes = mutableListOf<Int>()
-            var header = ""
-            
-            var startIdx = 0
-            if (tokens.isNotEmpty() && tokens[0].length == 3) {
-                header = tokens[0]
-                startIdx = 1
-            } else if (tokens.size >= 3 && tokens[0].length == 2 && tokens[1].length == 2 && tokens[2].length == 2) {
-                // Legacy 3-byte header
-                header = tokens.take(3).joinToString("")
-                startIdx = 3
-            }
-            
-            for (i in startIdx until tokens.size) {
-                tokens[i].toIntOrNull(16)?.let(bytes::add)
-            }
+            val parsed = parseHeaderAndBytes(tokens)
+            val bytes = parsed.bytes
             
             if (bytes.isEmpty()) continue
             
-            // Check for CAN vs Legacy
             val typeByte = bytes[0]
             val type = FrameType.fromInt(typeByte) 
             
-            if (type != null && header.length == 3) {
-                // CAN Frame
-                if (bytes.size < 6 || bytes.size > 12) {
-                    obdError("Invalid frame size: ${bytes.size} bytes", LogCategory.Parsing)
-                }
-
-                val dataLen = when (type) {
-                    FrameType.SingleFrame -> typeByte and 0x0F
-                    FrameType.FirstFrame -> ((typeByte and 0x0F) shl 8) or bytes[1]
-                    else -> null
-                }
-                val seqIndex = if (type == FrameType.ConsecutiveFrame) typeByte and 0x0F else 0
-                frames.add(Frame(canonicalRaw(header, bytes), bytes, type, dataLen, seqIndex))
+            if (type != null && parsed.hasCanHeader) {
+                frames.add(canFrame(parsed.header, bytes, type, typeByte))
             } else {
-                if (header.length == 3 && type == null) {
-                    obdError("Invalid frame type detected", LogCategory.Parsing)
-                }
-                // Legacy Frame (No PCI, just Mode + Data + Checksum)
-                // Swift LegacyParcer: dropFirst(3).dropLast()
-                // Our bytes already dropped the 3-byte header.
-                // We just need to drop the checksum (last byte).
-                if (bytes.size >= 2) {
-                    val legacyData = bytes.dropLast(1)
-                    // We'll treat it as a SingleFrame for simplicity in the assembler
-                    frames.add(Frame(trimmed, legacyData, FrameType.SingleFrame, legacyData.size, 0))
-                }
+                legacyFrame(trimmed, bytes, parsed.hasCanHeader, type)?.let(frames::add)
             }
         }
         return frames
+    }
+
+    private data class ParsedLine(val header: String, val bytes: List<Int>) {
+        val hasCanHeader: Boolean = header.length == 3
+    }
+
+    private fun shouldSkipLine(line: String): Boolean =
+        line.isEmpty() ||
+            line.contains("SEARCHING") ||
+            line.contains("NO DATA") ||
+            line.contains("OK") ||
+            line.contains("ELM")
+
+    private fun parseHeaderAndBytes(tokens: List<String>): ParsedLine {
+        val headerSize = when {
+            tokens.isNotEmpty() && tokens[0].length == 3 -> 1
+            tokens.size >= 3 && tokens.take(3).all { it.length == 2 } -> 3
+            else -> 0
+        }
+        val header = when (headerSize) {
+            1 -> tokens[0]
+            3 -> tokens.take(3).joinToString("")
+            else -> ""
+        }
+        val bytes = tokens
+            .drop(headerSize)
+            .mapNotNull { it.toIntOrNull(16) }
+        return ParsedLine(header, bytes)
+    }
+
+    private fun canFrame(header: String, bytes: List<Int>, type: FrameType, typeByte: Int): Frame {
+        if (bytes.size < 6 || bytes.size > 12) {
+            obdError("Invalid frame size: ${bytes.size} bytes", LogCategory.Parsing)
+        }
+        val dataLen = when (type) {
+            FrameType.SingleFrame -> typeByte and 0x0F
+            FrameType.FirstFrame -> ((typeByte and 0x0F) shl 8) or bytes[1]
+            else -> null
+        }
+        val seqIndex = if (type == FrameType.ConsecutiveFrame) typeByte and 0x0F else 0
+        return Frame(canonicalRaw(header, bytes), bytes, type, dataLen, seqIndex)
+    }
+
+    private fun legacyFrame(trimmed: String, bytes: List<Int>, hadCanHeader: Boolean, type: FrameType?): Frame? {
+        if (hadCanHeader && type == null) {
+            obdError("Invalid frame type detected", LogCategory.Parsing)
+        }
+        if (bytes.size < 2) return null
+        val legacyData = bytes.dropLast(1)
+        return Frame(trimmed, legacyData, FrameType.SingleFrame, legacyData.size, 0)
     }
 
     private fun tokenizeResponseLine(line: String): List<String> {

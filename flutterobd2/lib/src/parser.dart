@@ -51,7 +51,8 @@ class CANParser {
   late final List<Frame> frames;
 
   CANParser(List<String> lines, {required int idBits}) {
-    var obdLines = lines.map((e) => e.replaceAll(' ', '')).where((e) => e.isHex).toList();
+    var obdLines =
+        lines.map((e) => e.replaceAll(' ', '')).where((e) => e.isHex).toList();
 
     var parsedFrames = <Frame>[];
     for (var raw in obdLines) {
@@ -99,7 +100,8 @@ class CanMessage implements ParsedMessage {
 
   Uint8List _parseSingleFrameMessage(List<Frame> frames) {
     var frame = frames.first;
-    if (frame.type != FrameType.singleFrame) throw ParserError("Not a single frame");
+    if (frame.type != FrameType.singleFrame)
+      throw ParserError("Not a single frame");
     var dataLen = frame.dataLen;
     if (dataLen == null || dataLen <= 0 || frame.data.length < dataLen + 1) {
       throw ParserError("Frame validation failed");
@@ -108,29 +110,33 @@ class CanMessage implements ParsedMessage {
   }
 
   Uint8List _parseMultiFrameMessage(List<Frame> frames) {
-    var firstFrameIndex = frames.indexWhere((f) => f.type == FrameType.firstFrame);
+    var firstFrameIndex =
+        frames.indexWhere((f) => f.type == FrameType.firstFrame);
     if (firstFrameIndex == -1) {
       throw ParserError("Failed to parse multi frame message: No first frame");
     }
     var firstFrame = frames[firstFrameIndex];
-    var consecutiveFrames = frames.where((f) => f.type == FrameType.consecutiveFrame).toList();
+    var consecutiveFrames =
+        frames.where((f) => f.type == FrameType.consecutiveFrame).toList();
     return _assembleData(firstFrame, consecutiveFrames);
   }
 
   Uint8List _assembleData(Frame firstFrame, List<Frame> consecutiveFrames) {
     var assembledData = BytesBuilder();
     assembledData.add(firstFrame.data);
-    
+
     for (var frame in consecutiveFrames) {
       if (frame.data.isNotEmpty) {
         assembledData.add(frame.data.skip(1).toList());
       }
     }
-    
-    return _extractDataFromBytes(assembledData.toBytes(), firstFrame.dataLen, startIndex: 2);
+
+    return _extractDataFromBytes(assembledData.toBytes(), firstFrame.dataLen,
+        startIndex: 2);
   }
 
-  Uint8List _extractDataFromBytes(Uint8List rawData, int? dataLen, {required int startIndex}) {
+  Uint8List _extractDataFromBytes(Uint8List rawData, int? dataLen,
+      {required int startIndex}) {
     if (dataLen == null) {
       throw ParserError("Failed to extract data: unknown length");
     }
@@ -147,7 +153,8 @@ class LegacyParser {
   late final List<LegacyFrame> frames;
 
   LegacyParser(List<String> lines) {
-    final obdLines = lines.map((e) => e.replaceAll(' ', '')).where((e) => e.isHex).toList();
+    final obdLines =
+        lines.map((e) => e.replaceAll(' ', '')).where((e) => e.isHex).toList();
 
     final parsedFrames = <LegacyFrame>[];
     for (final raw in obdLines) {
@@ -183,7 +190,8 @@ class LegacyMessage implements ParsedMessage {
   @override
   final EcuId ecu;
 
-  LegacyMessage(this.frames) : ecu = (frames.isNotEmpty ? frames.first.txID : EcuId.unknown) {
+  LegacyMessage(this.frames)
+      : ecu = (frames.isNotEmpty ? frames.first.txID : EcuId.unknown) {
     if (frames.isEmpty) {
       throw ParserError("Invalid frame count");
     }
@@ -219,23 +227,12 @@ class LegacyMessage implements ParsedMessage {
   Uint8List _parseMultiFrameMessage(List<LegacyFrame> frames) {
     final mode = frames.first.data.isNotEmpty ? frames.first.data.first : 0x00;
     if (mode == 0x43) {
-      final output = BytesBuilder();
-      output.add([0x43, 0x00]);
-      for (final f in frames) {
-        if (f.data.length > 1) {
-          output.add(f.data.sublist(1));
-        }
-      }
-      return output.toBytes();
+      return _assembleTroubleCodeFrames(frames);
     }
 
-    final sorted = [...frames]..sort((a, b) {
-      final aIndex = a.data.length > 2 ? a.data[2] : 0xFF;
-      final bIndex = b.data.length > 2 ? b.data[2] : 0xFF;
-      return aIndex.compareTo(bIndex);
-    });
+    final sorted = _sortLegacyFrames(frames);
 
-    if (sorted.isEmpty || sorted.first.data.length <= 2 || sorted.first.data[2] != 1) {
+    if (!_hasValidFirstOrderByte(sorted)) {
       throw ParserError("Invalid order byte");
     }
 
@@ -247,6 +244,33 @@ class LegacyMessage implements ParsedMessage {
     }
     return output.toBytes();
   }
+
+  Uint8List _assembleTroubleCodeFrames(List<LegacyFrame> frames) {
+    final output = BytesBuilder();
+    output.add([0x43, 0x00]);
+    for (final f in frames) {
+      if (f.data.length > 1) {
+        output.add(f.data.sublist(1));
+      }
+    }
+    return output.toBytes();
+  }
+
+  List<LegacyFrame> _sortLegacyFrames(List<LegacyFrame> frames) {
+    return [...frames]..sort((a, b) {
+        final aIndex = _legacyOrderByte(a);
+        final bIndex = _legacyOrderByte(b);
+        return aIndex.compareTo(bIndex);
+      });
+  }
+
+  int _legacyOrderByte(LegacyFrame frame) =>
+      frame.data.length > 2 ? frame.data[2] : 0xFF;
+
+  bool _hasValidFirstOrderByte(List<LegacyFrame> frames) =>
+      frames.isNotEmpty &&
+      frames.first.data.length > 2 &&
+      frames.first.data[2] == 1;
 }
 
 class Frame {
@@ -317,7 +341,8 @@ class LegacyFrame {
       throw ParserError("Invalid frame size: ${dataBytes.length} bytes");
     }
 
-    data = Uint8List.fromList(dataBytes.skip(3).take(dataBytes.length - 4).toList());
+    data = Uint8List.fromList(
+        dataBytes.skip(3).take(dataBytes.length - 4).toList());
     priority = dataBytes[0];
     rxID = dataBytes[1];
     txID = EcuId.fromValue(dataBytes[2] & 0x07);

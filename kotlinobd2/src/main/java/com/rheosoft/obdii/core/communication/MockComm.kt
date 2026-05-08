@@ -13,6 +13,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
+private const val NO_DATA = "NO DATA"
+
 class MockComm : CommProtocol {
     private val stateFlow = MutableStateFlow(AdapterConnectionState.disconnected)
     override val connectionState: StateFlow<AdapterConnectionState> = stateFlow
@@ -38,7 +40,7 @@ class MockComm : CommProtocol {
         if (trimmed.startsWith("06")) return withEcho(trimmed, composeMode6(trimmed))
         if (trimmed.startsWith("09")) return withEcho(trimmed, composeMode9(trimmed))
         if (trimmed.startsWith("22")) return withEcho(trimmed, composeMode22(trimmed))
-        return withEcho(trimmed, listOf("NO DATA"))
+        return withEcho(trimmed, listOf(NO_DATA))
     }
 
     private fun handleAt(command: String): List<String> {
@@ -224,9 +226,9 @@ class MockComm : CommProtocol {
                 "41 5E %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
             }
             "5F" -> "41 5F 01"
-            else -> "NO DATA"
+            else -> NO_DATA
         }
-        if (payload == "NO DATA") return listOf(payload)
+        if (payload == NO_DATA) return listOf(payload)
         return listOf(frame(payload))
     }
 
@@ -331,9 +333,9 @@ class MockComm : CommProtocol {
             "60" -> "46 60 C0 00 00 01 00"
             "80" -> "46 80 C0 00 00 01 00"
             "A0" -> "46 A0 C0 00 00 01 00"
-            else -> "NO DATA"
+            else -> NO_DATA
         }
-        return if (payload == "NO DATA") listOf(payload) else listOf(frame(payload))
+        return if (payload == NO_DATA) listOf(payload) else listOf(frame(payload))
     }
 
     private fun composeMode9(command: String): List<String> {
@@ -344,7 +346,7 @@ class MockComm : CommProtocol {
                 frame("21 41 4C 33 41 50 37 44"),
                 frame("22 43 31 39 39 35 38 33"),
             )
-            else -> listOf("NO DATA")
+            else -> listOf(NO_DATA)
         }
     }
 
@@ -354,9 +356,9 @@ class MockComm : CommProtocol {
             "221470" -> "62 14 70 31 00"
             "221940" -> "62 19 40 49 00"
             "221154" -> "62 11 54 64 00"
-            else -> "NO DATA"
+            else -> NO_DATA
         }
-        return if (payload == "NO DATA") listOf(payload) else listOf(frame(payload))
+        return if (payload == NO_DATA) listOf(payload) else listOf(frame(payload))
     }
 
     private fun sessionElapsed(): Double {

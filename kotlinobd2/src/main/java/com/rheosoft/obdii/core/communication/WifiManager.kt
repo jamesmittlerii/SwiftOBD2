@@ -65,35 +65,47 @@ class WifiManager(
         var lastError: Throwable? = null
         repeat((retries + 1).coerceAtLeast(1)) {
             try {
-                val localWriter = writer ?: throw CommunicationError("No active socket writer")
-                val localReader = reader ?: throw CommunicationError("No active socket reader")
-                obdDebug("Sending: $command", LogCategory.Wifi)
-                localWriter.print("$command\r")
-                localWriter.flush()
-
-                val result = StringBuilder()
-                while (true) {
-                    val ch = localReader.read()
-                    if (ch == -1) break
-                    val c = ch.toChar()
-                    result.append(c)
-                    if (c == '>') break
-                }
-                val text = result.toString()
-                obdDebug("Received: $text", LogCategory.Wifi)
-                val lines = text
-                    .replace(">", "")
-                    .split('\r', '\n')
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-                if (lines.isEmpty()) throw InvalidDataError()
-                return@withContext lines
+                return@withContext sendCommandAttempt(command)
             } catch (e: Throwable) {
                 lastError = e
             }
         }
         obdError("WiFi send failed: $command - ${lastError?.message}", LogCategory.Wifi)
         throw CommunicationError("WiFi send failed", lastError)
+    }
+
+    private fun sendCommandAttempt(command: String): List<String> {
+        val localWriter = writer ?: throw CommunicationError("No active socket writer")
+        val localReader = reader ?: throw CommunicationError("No active socket reader")
+        obdDebug("Sending: $command", LogCategory.Wifi)
+        localWriter.print("$command\r")
+        localWriter.flush()
+
+        val text = readUntilPrompt(localReader)
+        obdDebug("Received: $text", LogCategory.Wifi)
+        return parseResponseLines(text)
+    }
+
+    private fun readUntilPrompt(localReader: BufferedReader): String {
+        val result = StringBuilder()
+        while (true) {
+            val ch = localReader.read()
+            if (ch == -1) break
+            val c = ch.toChar()
+            result.append(c)
+            if (c == '>') break
+        }
+        return result.toString()
+    }
+
+    private fun parseResponseLines(text: String): List<String> {
+        val lines = text
+            .replace(">", "")
+            .split('\r', '\n')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        if (lines.isEmpty()) throw InvalidDataError()
+        return lines
     }
 
     override fun disconnectPeripheral() {

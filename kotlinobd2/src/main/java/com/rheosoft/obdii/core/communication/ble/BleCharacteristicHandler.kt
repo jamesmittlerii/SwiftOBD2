@@ -3,6 +3,23 @@ package com.rheosoft.obdii.core.communication.ble
 class BleCharacteristicHandler(
     private val processor: BleMessageProcessor,
 ) {
+    private val readUuidHints = setOf(
+        "FFF1",
+        "2AF0",
+        "FFC1",
+        "6E400003B5A3F393E0A9E50E24DCCA9E",
+    )
+    private val writeUuidHints = setOf(
+        "FFF2",
+        "2AF1",
+        "FFC2",
+        "6E400002B5A3F393E0A9E50E24DCCA9E",
+    )
+    private val readWriteUuidHints = setOf(
+        "FFE1",
+        "BEF8D6C99C214C9EB632BD58C1009F9F",
+    )
+
     var readCharacteristic: BleCharacteristic? = null
         private set
     var writeCharacteristic: BleCharacteristic? = null
@@ -13,35 +30,41 @@ class BleCharacteristicHandler(
 
     fun setupCharacteristics(characteristics: List<BleCharacteristic>) {
         for (ch in characteristics) {
-            when (normalizeUuid(ch.uuid)) {
-                "FFE1" -> {
-                    if (ch.canWrite) writeCharacteristic = ch
-                    if (ch.canRead || ch.canNotify) readCharacteristic = ch
-                    if (readCharacteristic == null) readCharacteristic = ch
-                    if (writeCharacteristic == null) writeCharacteristic = ch
-                }
-                "FFF1", "2AF0" -> if (ch.canRead || ch.canNotify) readCharacteristic = ch
-                "FFF2", "2AF1" -> if (ch.canWrite) writeCharacteristic = ch
-                "FFC1" -> if (ch.canRead || ch.canNotify) readCharacteristic = ch
-                "FFC2" -> if (ch.canWrite) writeCharacteristic = ch
-                "6E400002B5A3F393E0A9E50E24DCCA9E" -> if (ch.canWrite) writeCharacteristic = ch
-                "6E400003B5A3F393E0A9E50E24DCCA9E" -> if (ch.canRead || ch.canNotify) readCharacteristic = ch
-                // Some vLink adapters expose a proprietary RW+notify channel on this UUID.
-                "BEF8D6C99C214C9EB632BD58C1009F9F" -> {
-                    if (ch.canRead || ch.canNotify) readCharacteristic = ch
-                    if (ch.canWrite) writeCharacteristic = ch
-                }
-                else -> {
-                    if (readCharacteristic == null && (ch.canRead || ch.canNotify)) readCharacteristic = ch
-                    if (writeCharacteristic == null && ch.canWrite) writeCharacteristic = ch
-                    if (readCharacteristic == null && writeCharacteristic == null && ch.canRead && ch.canWrite) {
-                        // Swift parity fallback: one characteristic can be both paths.
-                        readCharacteristic = ch
-                        writeCharacteristic = ch
-                    }
-                }
-            }
+            assignCharacteristic(ch, normalizeUuid(ch.uuid))
         }
+    }
+
+    private fun assignCharacteristic(ch: BleCharacteristic, normalizedUuid: String) {
+        when {
+            normalizedUuid in readWriteUuidHints -> assignReadWriteHint(ch)
+            normalizedUuid in readUuidHints -> assignRead(ch)
+            normalizedUuid in writeUuidHints -> assignWrite(ch)
+            else -> assignFallback(ch)
+        }
+    }
+
+    private fun assignReadWriteHint(ch: BleCharacteristic) {
+        assignRead(ch)
+        assignWrite(ch)
+        if (readCharacteristic == null) readCharacteristic = ch
+        if (writeCharacteristic == null) writeCharacteristic = ch
+    }
+
+    private fun assignFallback(ch: BleCharacteristic) {
+        if (readCharacteristic == null) assignRead(ch)
+        if (writeCharacteristic == null) assignWrite(ch)
+        if (readCharacteristic == null && writeCharacteristic == null && ch.canRead && ch.canWrite) {
+            readCharacteristic = ch
+            writeCharacteristic = ch
+        }
+    }
+
+    private fun assignRead(ch: BleCharacteristic) {
+        if (ch.canRead || ch.canNotify) readCharacteristic = ch
+    }
+
+    private fun assignWrite(ch: BleCharacteristic) {
+        if (ch.canWrite) writeCharacteristic = ch
     }
 
     fun handleUpdatedValue(data: ByteArray) {

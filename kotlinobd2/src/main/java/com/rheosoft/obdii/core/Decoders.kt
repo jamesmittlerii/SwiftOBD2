@@ -1,5 +1,7 @@
 package com.rheosoft.obdii.core
 
+private const val INSUFFICIENT_DATA = "Insufficient data"
+
 enum class MeasurementUnit(val displayName: String) {
     Metric("Metric"),
     Imperial("Imperial");
@@ -140,7 +142,7 @@ private val uasSpecs: Map<Int, UasSpec> = mapOf(
 class UasDecoder(private val id: Int) : Decoder {
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
         val spec = uasSpecs[id] ?: return DecodeResult.Failure("Unsupported UAS id: $id")
-        if (data.isEmpty()) return DecodeResult.Failure("Insufficient data")
+        if (data.isEmpty()) return DecodeResult.Failure(INSUFFICIENT_DATA)
 
         val bitWidth = data.size * 8
         var intValue = data.fold(0L) { acc, byte -> (acc shl 8) or (byte and 0xFF).toLong() }
@@ -181,7 +183,7 @@ class UasDecoder(private val id: Int) : Decoder {
 
 class TemperatureDecoder : Decoder {
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
-        if (data.isEmpty()) return DecodeResult.Failure("Insufficient data")
+        if (data.isEmpty()) return DecodeResult.Failure(INSUFFICIENT_DATA)
         val celsius = data[0] - 40.0
         return if (unit == MeasurementUnit.Imperial) {
             DecodeResult.Measurement(MeasurementResult((celsius * 9.0 / 5.0) + 32.0, "°F"))
@@ -193,7 +195,7 @@ class TemperatureDecoder : Decoder {
 
 class PercentDecoder : Decoder {
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
-        if (data.isEmpty()) return DecodeResult.Failure("Insufficient data")
+        if (data.isEmpty()) return DecodeResult.Failure(INSUFFICIENT_DATA)
         val pct = data[0] * 100.0 / 255.0
         return DecodeResult.Measurement(MeasurementResult(pct, "%"))
     }
@@ -201,7 +203,7 @@ class PercentDecoder : Decoder {
 
 class RpmDecoder : Decoder {
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
-        if (data.size < 2) return DecodeResult.Failure("Insufficient data")
+        if (data.size < 2) return DecodeResult.Failure(INSUFFICIENT_DATA)
         val rpm = (data[0] * 256 + data[1]) / 4.0
         return DecodeResult.Measurement(MeasurementResult(rpm, "RPM"))
     }
@@ -209,7 +211,7 @@ class RpmDecoder : Decoder {
 
 class VoltageDecoder : Decoder {
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
-        if (data.size < 2) return DecodeResult.Failure("Insufficient data")
+        if (data.size < 2) return DecodeResult.Failure(INSUFFICIENT_DATA)
         val volts = (data[0] * 256 + data[1]) / 1000.0
         return DecodeResult.Measurement(MeasurementResult(volts, "V"))
     }
@@ -217,7 +219,7 @@ class VoltageDecoder : Decoder {
 
 class SpeedDecoder : Decoder {
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
-        if (data.isEmpty()) return DecodeResult.Failure("Insufficient data")
+        if (data.isEmpty()) return DecodeResult.Failure(INSUFFICIENT_DATA)
         val kmh = data[0].toDouble()
         return if (unit == MeasurementUnit.Imperial) {
             DecodeResult.Measurement(MeasurementResult(kmh * 0.621371, "mph"))
@@ -229,7 +231,7 @@ class SpeedDecoder : Decoder {
 
 class LambdaDecoder : Decoder {
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
-        if (data.size < 2) return DecodeResult.Failure("Insufficient data")
+        if (data.size < 2) return DecodeResult.Failure(INSUFFICIENT_DATA)
         val ratio = (data[0] * 256 + data[1]) / 32768.0
         return DecodeResult.Measurement(MeasurementResult(ratio, "lambda"))
     }
@@ -272,7 +274,7 @@ class FuelStatusDecoder : Decoder {
     )
 
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
-        if (data.size < 2) return DecodeResult.Failure("Insufficient data")
+        if (data.size < 2) return DecodeResult.Failure(INSUFFICIENT_DATA)
         val a = data[0]
         val b = data[1]
         return DecodeResult.FuelStatusResult(listOf(decodeByte(a), decodeByte(b)))
@@ -294,7 +296,7 @@ class FuelStatusDecoder : Decoder {
 
 class StatusDecoder : Decoder {
     override fun decode(data: List<Int>, unit: MeasurementUnit): DecodeResult {
-        if (data.size < 4) return DecodeResult.Failure("Insufficient data")
+        if (data.size < 4) return DecodeResult.Failure(INSUFFICIENT_DATA)
         val a = data[0] // milAndCount
         val b = data[1]
         val c = data[2]
