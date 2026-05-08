@@ -17,11 +17,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-        with:
-          submodules: recursive
-          fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }} # Required for private submodules
-
+   
      
       - name: Set up Java
         uses: actions/setup-java@v5
