@@ -18,7 +18,7 @@ sealed class DecodeResult {
     data class Failure(val message: String) : DecodeResult()
 }
 
-interface Decoder {
+fun interface Decoder {
     /**
      * Decodes the raw payload bytes. 
      * The payload should NOT include the service or PID bytes.

@@ -11,7 +11,9 @@ enum MeasurementUnit {
   final String value;
   const MeasurementUnit(this.value);
 
-  MeasurementUnit get next => this == MeasurementUnit.metric ? MeasurementUnit.imperial : MeasurementUnit.metric;
+  MeasurementUnit get next => this == MeasurementUnit.metric
+      ? MeasurementUnit.imperial
+      : MeasurementUnit.metric;
 }
 
 class Unit {
@@ -34,7 +36,7 @@ class Unit {
 
   static const celsius = Unit("°C");
   static const fahrenheit = Unit("°F");
-  
+
   static const kilometers = Unit("km");
   static const miles = Unit("mi");
   static const kilometersPerHour = Unit("km/h");
@@ -95,7 +97,8 @@ class ReadinessMonitor {
   final bool supported;
   final bool ready;
 
-  ReadinessMonitor({required this.name, required this.supported, required this.ready});
+  ReadinessMonitor(
+      {required this.name, required this.supported, required this.ready});
 }
 
 class Status {
@@ -104,7 +107,11 @@ class Status {
   final List<ReadinessMonitor> monitors;
   final String ignitionType;
 
-  Status({required this.milOn, required this.dtcCount, required this.monitors, this.ignitionType = "Spark"});
+  Status(
+      {required this.milOn,
+      required this.dtcCount,
+      required this.monitors,
+      this.ignitionType = "Spark"});
 }
 
 class StatusTest {
@@ -170,9 +177,14 @@ class Uas {
   final Unit unit;
   final double offset;
 
-  Uas({required this.signed, required this.scale, required this.unit, this.offset = 0.0});
+  Uas(
+      {required this.signed,
+      required this.scale,
+      required this.unit,
+      this.offset = 0.0});
 
-  MeasurementResult decode(Uint8List bytes, [MeasurementUnit targetUnit = MeasurementUnit.metric]) {
+  MeasurementResult decode(Uint8List bytes,
+      [MeasurementUnit targetUnit = MeasurementUnit.metric]) {
     if (bytes.isEmpty) return MeasurementResult(0, unit);
 
     int bitWidth = bytes.length * 8;
@@ -189,12 +201,11 @@ class Uas {
     }
 
     double baseValue = intValue * scale + offset;
-    Unit baseUnit = this.unit;
 
     if (targetUnit == MeasurementUnit.imperial) {
-      return _convertToImperial(baseValue, baseUnit);
+      return _convertToImperial(baseValue, unit);
     } else {
-      return MeasurementResult(baseValue, baseUnit);
+      return MeasurementResult(baseValue, unit);
     }
   }
 
@@ -278,7 +289,8 @@ class PercentDecoder implements Decoder {
   DecodeResult decode(Uint8List data, MeasurementUnit unit) {
     double value = data.isNotEmpty ? data[0].toDouble() : 0.0;
     value = value * 100.0 / 255.0;
-    return DecodeResult(measurementResult: MeasurementResult(value, Unit.percent));
+    return DecodeResult(
+        measurementResult: MeasurementResult(value, Unit.percent));
   }
 }
 
@@ -288,9 +300,11 @@ class TemperatureDecoder implements Decoder {
     double celsius = bytesToInt(data).toDouble() - 40.0;
     if (unit == MeasurementUnit.imperial) {
       double fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
-      return DecodeResult(measurementResult: MeasurementResult(fahrenheit, Unit.fahrenheit));
+      return DecodeResult(
+          measurementResult: MeasurementResult(fahrenheit, Unit.fahrenheit));
     } else {
-      return DecodeResult(measurementResult: MeasurementResult(celsius, Unit.celsius));
+      return DecodeResult(
+          measurementResult: MeasurementResult(celsius, Unit.celsius));
     }
   }
 }
@@ -333,31 +347,85 @@ class StatusDecoder implements Decoder {
 
     if (isDiesel) {
       monitors = [
-        ReadinessMonitor(name: "Misfire", supported: true, ready: (a & 0x10) == 0),
-        ReadinessMonitor(name: "Fuel System", supported: true, ready: (a & 0x20) == 0),
-        ReadinessMonitor(name: "Comprehensive Components", supported: true, ready: (a & 0x40) == 0),
-        ReadinessMonitor(name: "NMHC catalyst", supported: (b & 0x01) != 0, ready: (c & 0x01) == 0),
-        ReadinessMonitor(name: "HNOx/SCR Catalyst", supported: (b & 0x02) != 0, ready: (c & 0x02) == 0),
-        ReadinessMonitor(name: "Boost pressure", supported: (b & 0x08) != 0, ready: (c & 0x08) == 0),
-        ReadinessMonitor(name: "Exhaust gas", supported: (b & 0x20) != 0, ready: (c & 0x20) == 0),
-        ReadinessMonitor(name: "PM filter", supported: (b & 0x40) != 0, ready: (c & 0x40) == 0),
-        ReadinessMonitor(name: "EGR/VVT System", supported: (b & 0x80) != 0, ready: (c & 0x80) == 0),
+        ReadinessMonitor(
+            name: "Misfire", supported: true, ready: (a & 0x10) == 0),
+        ReadinessMonitor(
+            name: "Fuel System", supported: true, ready: (a & 0x20) == 0),
+        ReadinessMonitor(
+            name: "Comprehensive Components",
+            supported: true,
+            ready: (a & 0x40) == 0),
+        ReadinessMonitor(
+            name: "NMHC catalyst",
+            supported: (b & 0x01) != 0,
+            ready: (c & 0x01) == 0),
+        ReadinessMonitor(
+            name: "HNOx/SCR Catalyst",
+            supported: (b & 0x02) != 0,
+            ready: (c & 0x02) == 0),
+        ReadinessMonitor(
+            name: "Boost pressure",
+            supported: (b & 0x08) != 0,
+            ready: (c & 0x08) == 0),
+        ReadinessMonitor(
+            name: "Exhaust gas",
+            supported: (b & 0x20) != 0,
+            ready: (c & 0x20) == 0),
+        ReadinessMonitor(
+            name: "PM filter",
+            supported: (b & 0x40) != 0,
+            ready: (c & 0x40) == 0),
+        ReadinessMonitor(
+            name: "EGR/VVT System",
+            supported: (b & 0x80) != 0,
+            ready: (c & 0x80) == 0),
       ];
     } else {
       monitors = [
-        ReadinessMonitor(name: "Misfire", supported: true, ready: (a & 0x10) == 0),
-        ReadinessMonitor(name: "Fuel System", supported: true, ready: (a & 0x20) == 0),
-        ReadinessMonitor(name: "Comprehensive Components", supported: true, ready: (a & 0x40) == 0),
-        ReadinessMonitor(name: "Catalyst", supported: (b & 0x01) != 0, ready: (c & 0x01) == 0),
-        ReadinessMonitor(name: "Heated Catalyst", supported: (b & 0x02) != 0, ready: (c & 0x02) == 0),
-        ReadinessMonitor(name: "Evaporative System", supported: (b & 0x04) != 0, ready: (c & 0x04) == 0),
-        ReadinessMonitor(name: "Secondary Air System", supported: (b & 0x08) != 0, ready: (c & 0x08) == 0),
-        ReadinessMonitor(name: "O₂ Sensor", supported: (b & 0x20) != 0, ready: (c & 0x20) == 0),
-        ReadinessMonitor(name: "O₂ Heater", supported: (b & 0x40) != 0, ready: (c & 0x40) == 0),
-        ReadinessMonitor(name: "EGR/VVT System", supported: (b & 0x80) != 0, ready: (c & 0x80) == 0),
+        ReadinessMonitor(
+            name: "Misfire", supported: true, ready: (a & 0x10) == 0),
+        ReadinessMonitor(
+            name: "Fuel System", supported: true, ready: (a & 0x20) == 0),
+        ReadinessMonitor(
+            name: "Comprehensive Components",
+            supported: true,
+            ready: (a & 0x40) == 0),
+        ReadinessMonitor(
+            name: "Catalyst",
+            supported: (b & 0x01) != 0,
+            ready: (c & 0x01) == 0),
+        ReadinessMonitor(
+            name: "Heated Catalyst",
+            supported: (b & 0x02) != 0,
+            ready: (c & 0x02) == 0),
+        ReadinessMonitor(
+            name: "Evaporative System",
+            supported: (b & 0x04) != 0,
+            ready: (c & 0x04) == 0),
+        ReadinessMonitor(
+            name: "Secondary Air System",
+            supported: (b & 0x08) != 0,
+            ready: (c & 0x08) == 0),
+        ReadinessMonitor(
+            name: "O₂ Sensor",
+            supported: (b & 0x20) != 0,
+            ready: (c & 0x20) == 0),
+        ReadinessMonitor(
+            name: "O₂ Heater",
+            supported: (b & 0x40) != 0,
+            ready: (c & 0x40) == 0),
+        ReadinessMonitor(
+            name: "EGR/VVT System",
+            supported: (b & 0x80) != 0,
+            ready: (c & 0x80) == 0),
       ];
     }
-    return DecodeResult(statusResult: Status(milOn: milOn, dtcCount: dtcCount, monitors: monitors, ignitionType: isDiesel ? "Compression" : "Spark"));
+    return DecodeResult(
+        statusResult: Status(
+            milOn: milOn,
+            dtcCount: dtcCount,
+            monitors: monitors,
+            ignitionType: isDiesel ? "Compression" : "Spark"));
   }
 }
 
@@ -366,7 +434,7 @@ class DtcDecoder implements Decoder {
   DecodeResult decode(Uint8List data, MeasurementUnit unit) {
     List<TroubleCodeMetadata> codes = [];
     for (int i = 0; i < data.length - 1; i += 2) {
-      var dtc = _parseDTC(Uint8List.fromList([data[i], data[i+1]]));
+      var dtc = _parseDTC(Uint8List.fromList([data[i], data[i + 1]]));
       if (dtc != null) {
         codes.add(dtc);
       }
@@ -387,37 +455,14 @@ class DtcDecoder implements Decoder {
 
     final enriched = TroubleCodeCatalog.lookup(dtc);
     if (enriched != null) return enriched;
-    // Catalog not yet loaded (async race) — compute severity directly from the
-    // code string, mirroring the Swift determineSeverity heuristic.
     return TroubleCodeMetadata(
       code: dtc,
       title: "Unknown",
       description: "No description available.",
-      severity: _determineSeverity(dtc),
+      severity: TroubleCodeCatalog.severityFor(dtc),
       causes: [],
       remedies: [],
     );
-  }
-
-  /// Mirrors Swift's private `determineSeverity(for:)` function in TroubleCodes.swift.
-  static String _determineSeverity(String code) {
-    const criticalCodes = {'P0087', 'P0088', 'P0217', 'P0218', 'P0219', 'P0234', 'P0606'};
-    if (criticalCodes.contains(code) ||
-        code.startsWith('P030') ||
-        code.startsWith('P031')) {
-      return 'Critical';
-    }
-    const highPrefixes = ['P017', 'P032', 'P033', 'P034', 'P035', 'P036', 'P039'];
-    const highCodes = {'U0121', 'U0151'};
-    if (highCodes.contains(code) ||
-        highPrefixes.any(code.startsWith) ||
-        code.startsWith('P07') ||
-        code.startsWith('P08')) {
-      return 'High';
-    }
-    const lowPrefixes = ['P041', 'P042', 'P043', 'P044', 'P045', 'P049'];
-    if (lowPrefixes.any(code.startsWith)) return 'Low';
-    return 'Moderate';
   }
 }
 
@@ -432,8 +477,10 @@ class SingleDtcDecoder extends DtcDecoder {
 class PercentCenteredDecoder implements Decoder {
   @override
   DecodeResult decode(Uint8List data, MeasurementUnit unit) {
-    double value = data.isNotEmpty ? (data[0].toDouble() - 128.0) * 100.0 / 128.0 : 0.0;
-    return DecodeResult(measurementResult: MeasurementResult(value, Unit.percent));
+    double value =
+        data.isNotEmpty ? (data[0].toDouble() - 128.0) * 100.0 / 128.0 : 0.0;
+    return DecodeResult(
+        measurementResult: MeasurementResult(value, Unit.percent));
   }
 }
 
@@ -448,7 +495,8 @@ class CurrentCenteredDecoder implements Decoder {
       throw Exception("Invalid data for CurrentCenteredDecoder");
     }
     final value = (working[0].toDouble() - 128.0) * (2.0 / 128.0);
-    return DecodeResult(measurementResult: MeasurementResult(value, Unit.milliamperes));
+    return DecodeResult(
+        measurementResult: MeasurementResult(value, Unit.milliamperes));
   }
 }
 
@@ -456,7 +504,8 @@ class SensorVoltageDecoder implements Decoder {
   @override
   DecodeResult decode(Uint8List data, MeasurementUnit unit) {
     double value = data.isNotEmpty ? data[0] / 200.0 : 0.0;
-    return DecodeResult(measurementResult: MeasurementResult(value, Unit.volts));
+    return DecodeResult(
+        measurementResult: MeasurementResult(value, Unit.volts));
   }
 }
 
@@ -466,9 +515,12 @@ class FuelPressureDecoder implements Decoder {
     double value = data.isNotEmpty ? data[0] * 3.0 : 0.0;
     if (unit == MeasurementUnit.imperial) {
       value = value * 0.145038; // kPa to psi
-      return DecodeResult(measurementResult: MeasurementResult(value, Unit.poundsForcePerSquareInch));
+      return DecodeResult(
+          measurementResult:
+              MeasurementResult(value, Unit.poundsForcePerSquareInch));
     }
-    return DecodeResult(measurementResult: MeasurementResult(value, Unit.kilopascals));
+    return DecodeResult(
+        measurementResult: MeasurementResult(value, Unit.kilopascals));
   }
 }
 
@@ -478,10 +530,12 @@ class PressureDecoder implements Decoder {
     final valueKpa = data.isNotEmpty ? data[0].toDouble() : 0.0;
     if (unit == MeasurementUnit.imperial) {
       return DecodeResult(
-        measurementResult: MeasurementResult(valueKpa * 0.145038, Unit.poundsForcePerSquareInch),
+        measurementResult: MeasurementResult(
+            valueKpa * 0.145038, Unit.poundsForcePerSquareInch),
       );
     }
-    return DecodeResult(measurementResult: MeasurementResult(valueKpa, Unit.kilopascals));
+    return DecodeResult(
+        measurementResult: MeasurementResult(valueKpa, Unit.kilopascals));
   }
 }
 
@@ -489,7 +543,8 @@ class TimingAdvanceDecoder implements Decoder {
   @override
   DecodeResult decode(Uint8List data, MeasurementUnit unit) {
     final value = data.isNotEmpty ? (data[0] / 2.0) - 64.0 : -64.0;
-    return DecodeResult(measurementResult: MeasurementResult(value, Unit.degrees));
+    return DecodeResult(
+        measurementResult: MeasurementResult(value, Unit.degrees));
   }
 }
 
@@ -501,7 +556,8 @@ class SensorVoltageBigDecoder implements Decoder {
     }
     final raw = bytesToInt(data.sublist(2, 4));
     final voltage = (raw * 8.0) / 65535.0;
-    return DecodeResult(measurementResult: MeasurementResult(voltage, Unit.volts));
+    return DecodeResult(
+        measurementResult: MeasurementResult(voltage, Unit.volts));
   }
 }
 
@@ -516,10 +572,12 @@ class EvapPressureDecoder implements Decoder {
     final kpa = signed / 4.0;
     if (unit == MeasurementUnit.imperial) {
       return DecodeResult(
-        measurementResult: MeasurementResult(kpa * 0.145038, Unit.poundsForcePerSquareInch),
+        measurementResult:
+            MeasurementResult(kpa * 0.145038, Unit.poundsForcePerSquareInch),
       );
     }
-    return DecodeResult(measurementResult: MeasurementResult(kpa, Unit.kilopascals));
+    return DecodeResult(
+        measurementResult: MeasurementResult(kpa, Unit.kilopascals));
   }
 }
 
@@ -529,10 +587,12 @@ class AbsEvapPressureDecoder implements Decoder {
     final valueKpa = bytesToInt(data) / 200.0;
     if (unit == MeasurementUnit.imperial) {
       return DecodeResult(
-        measurementResult: MeasurementResult(valueKpa * 0.145038, Unit.poundsForcePerSquareInch),
+        measurementResult: MeasurementResult(
+            valueKpa * 0.145038, Unit.poundsForcePerSquareInch),
       );
     }
-    return DecodeResult(measurementResult: MeasurementResult(valueKpa, Unit.kilopascals));
+    return DecodeResult(
+        measurementResult: MeasurementResult(valueKpa, Unit.kilopascals));
   }
 }
 
@@ -540,7 +600,8 @@ class EvapPressureAltDecoder implements Decoder {
   @override
   DecodeResult decode(Uint8List data, MeasurementUnit unit) {
     final value = bytesToInt(data) - 32767.0;
-    return DecodeResult(measurementResult: MeasurementResult(value, Unit.pascal));
+    return DecodeResult(
+        measurementResult: MeasurementResult(value, Unit.pascal));
   }
 }
 
@@ -551,7 +612,8 @@ class InjectTimingDecoder implements Decoder {
       throw Exception("Invalid data for InjectTimingDecoder");
     }
     final value = (bytesToInt(data) - 21000.0) / 10.0;
-    return DecodeResult(measurementResult: MeasurementResult(value, Unit.degrees));
+    return DecodeResult(
+        measurementResult: MeasurementResult(value, Unit.degrees));
   }
 }
 
@@ -566,10 +628,13 @@ class FuelRateDecoder implements Decoder {
     final litersPerHour = (((a << 8) | b) * 0.05);
     if (unit == MeasurementUnit.imperial) {
       return DecodeResult(
-        measurementResult: MeasurementResult(litersPerHour * 0.264172, Unit.gallonsPerHour),
+        measurementResult:
+            MeasurementResult(litersPerHour * 0.264172, Unit.gallonsPerHour),
       );
     }
-    return DecodeResult(measurementResult: MeasurementResult(litersPerHour, Unit.litersPerHour));
+    return DecodeResult(
+        measurementResult:
+            MeasurementResult(litersPerHour, Unit.litersPerHour));
   }
 }
 
@@ -583,10 +648,12 @@ class GMEngineOilPressureDecoder implements Decoder {
     final clamped = pressureKpa < 0 ? 0.0 : pressureKpa;
     if (unit == MeasurementUnit.imperial) {
       return DecodeResult(
-        measurementResult: MeasurementResult(clamped * 0.145038, Unit.poundsForcePerSquareInch),
+        measurementResult: MeasurementResult(
+            clamped * 0.145038, Unit.poundsForcePerSquareInch),
       );
     }
-    return DecodeResult(measurementResult: MeasurementResult(clamped, Unit.kilopascals));
+    return DecodeResult(
+        measurementResult: MeasurementResult(clamped, Unit.kilopascals));
   }
 }
 
@@ -600,10 +667,12 @@ class GMACPressureDecoder implements Decoder {
     final clamped = pressureKpa < 0 ? 0.0 : pressureKpa;
     if (unit == MeasurementUnit.imperial) {
       return DecodeResult(
-        measurementResult: MeasurementResult(clamped * 0.145038, Unit.poundsForcePerSquareInch),
+        measurementResult: MeasurementResult(
+            clamped * 0.145038, Unit.poundsForcePerSquareInch),
       );
     }
-    return DecodeResult(measurementResult: MeasurementResult(clamped, Unit.kilopascals));
+    return DecodeResult(
+        measurementResult: MeasurementResult(clamped, Unit.kilopascals));
   }
 }
 
@@ -637,7 +706,8 @@ class AbsoluteLoadDecoder implements Decoder {
   @override
   DecodeResult decode(Uint8List data, MeasurementUnit unit) {
     final value = ((bytesToInt(data) * 100) / 255.0);
-    return DecodeResult(measurementResult: MeasurementResult(value, Unit.percent));
+    return DecodeResult(
+        measurementResult: MeasurementResult(value, Unit.percent));
   }
 }
 
@@ -662,7 +732,8 @@ class O2SensorsAltDecoder implements Decoder {
       throw Exception("Invalid data for O2SensorsAltDecoder");
     }
     return DecodeResult(
-      stringResult: "${bits.sublist(0, 2)}, ${bits.sublist(2, 4)}, ${bits.sublist(4, 6)}, ${bits.sublist(6, 8)}",
+      stringResult:
+          "${bits.sublist(0, 2)}, ${bits.sublist(2, 4)}, ${bits.sublist(4, 6)}, ${bits.sublist(6, 8)}",
     );
   }
 }
@@ -728,7 +799,8 @@ class AirStatusDecoder implements Decoder {
     }
     final index = bits.indexOf(1);
     final value = 7 - index;
-    return DecodeResult(measurementResult: MeasurementResult(value.toDouble(), Unit.amperes));
+    return DecodeResult(
+        measurementResult: MeasurementResult(value.toDouble(), Unit.amperes));
   }
 }
 
@@ -768,7 +840,8 @@ class MonitorDecoder implements Decoder {
       test.name = testInfo[0];
       test.desc = testInfo[1];
     } else {
-      test.name = "TID: \$${tid.toRadixString(16).padLeft(2, '0')} CID: \$${cid.toRadixString(16).padLeft(2, '0')}";
+      test.name =
+          "TID: \$${tid.toRadixString(16).padLeft(2, '0')} CID: \$${cid.toRadixString(16).padLeft(2, '0')}";
       test.desc = "Unknown";
     }
 

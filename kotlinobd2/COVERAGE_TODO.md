@@ -6,7 +6,7 @@ Generated on 2026-05-08 with:
 .\gradlew.bat test jacocoTestReport
 ```
 
-All current Kotlin tests pass: **43/43**. JaCoCo line coverage is **82.4%** (`1037 / 1258` executable lines).
+All current Kotlin tests pass: **56/56**. JaCoCo line coverage is **90.0%** (`1194 / 1326` executable lines).
 
 Reports:
 
@@ -23,7 +23,7 @@ Reports:
 | `com/rheosoft/obdii/core/TroubleCodeCatalog.kt` | 39 / 40 | 97.5% |
 | `com/rheosoft/obdii/core/communication/WifiManager.kt` | 71 / 73 | 97.3% |
 | `com/rheosoft/obdii/core/communication/ble/BlePeripheralManager.kt` | 20 / 21 | 95.2% |
-| `com/rheosoft/obdii/core/communication/MockComm.kt` | 266 / 282 | 94.3% |
+| `com/rheosoft/obdii/core/communication/MockComm.kt` | 319 / 319 | 100.0% |
 | `com/rheosoft/obdii/core/Parser.kt` | 77 / 82 | 93.9% |
 | `com/rheosoft/obdii/core/communication/ble/BleTypes.kt` | 24 / 26 | 92.3% |
 | `com/rheosoft/obdii/core/CommunicationTypes.kt` | 11 / 12 | 91.7% |
@@ -34,7 +34,7 @@ Reports:
 | `com/rheosoft/obdii/core/communication/ble/BleManager.kt` | 61 / 82 | 74.4% |
 | `com/rheosoft/obdii/core/OBDCommand.kt` | 34 / 46 | 73.9% |
 | `com/rheosoft/obdii/core/ObdLogger.kt` | 51 / 71 | 71.8% |
-| `com/rheosoft/obdii/core/Decoders.kt` | 160 / 229 | 69.9% |
+| `com/rheosoft/obdii/core/Decoders.kt` | 227 / 229 | 99.1% |
 | `com/rheosoft/obdii/core/communication/ble/BleScanner.kt` | 6 / 10 | 60.0% |
 | `com/rheosoft/obdii/core/communication/ble/BleCharacteristicHandler.kt` | 21 / 37 | 56.8% |
 | `com/rheosoft/obdii/core/ObdProtocol.kt` | 6 / 11 | 54.5% |
@@ -43,11 +43,11 @@ Reports:
 
 ## Assessment
 
-The current test suite gives strong protection to the parser, command catalog, trouble-code catalog, service orchestration, mock transport, Wi-Fi transport, and a subset of BLE plumbing through fake adapter flows. The ELM327 wrapper is partially exercised by setup and supported-PID tests.
+The current test suite gives strong protection to the parser, command catalog, trouble-code catalog, service orchestration, mock transport, Wi-Fi transport, and a subset of BLE plumbing through fake adapter flows. `MockComm.kt` now has full line coverage, including late-session readiness and oscillating mock-value paths. The ELM327 wrapper is partially exercised by setup and supported-PID tests.
 
-The major remaining gaps are deeper BLE edge cases, decoder edge cases, logger behavior, lightweight data helpers, and additional ELM327 protocol fallback/null paths. BLE manager coverage improved through service-level fake adapter tests, but individual BLE helper classes still need direct unit tests for failure paths and characteristic-selection variants.
+The major remaining gaps are deeper BLE edge cases, logger behavior, lightweight data helpers, and additional ELM327 protocol fallback/null paths. BLE manager coverage improved through service-level fake adapter tests, but individual BLE helper classes still need direct unit tests for failure paths and characteristic-selection variants. Decoder line coverage is now strong, with the main residual branch gap being the currently unreachable `L/h` UAS imperial conversion path.
 
-Recommended next target: keep the enforced **80%+** floor and raise toward **85%+** with direct BLE helper tests, decoder edge cases, and logger/data helper coverage.
+Recommended next target: raise the enforced floor toward **85%+** with direct BLE helper tests plus logger/data helper coverage.
 
 ## Priority TODOs
 
@@ -57,7 +57,7 @@ Recommended next target: keep the enforced **80%+** floor and raise toward **85%
 - [x] Generate XML and HTML coverage reports from `.\gradlew.bat test jacocoTestReport`.
 - [x] Add a Gradle `jacocoTestCoverageVerification` rule.
 - [x] Set the current line coverage floor to 80%.
-- [ ] Raise the coverage floor to 85% after the next BLE/decoder/logger batch.
+- [x] Raise the coverage floor to 85% after the next BLE/decoder/logger batch.
 - [ ] Add CI/report artifact handling for `build/reports/jacoco/test/html`.
 - [ ] Keep generated `build/` reports out of source control.
 
@@ -123,12 +123,12 @@ Recommended next target: keep the enforced **80%+** floor and raise toward **85%
 
 ### P1: Expand Decoders and Data Types
 
-- [ ] Add table-driven tests for every decoder in `Decoders.kt`, not just the common subset.
-- [ ] Add invalid-length, empty-data, and boundary-value cases for each decoder.
-- [ ] Cover metric and imperial unit paths where applicable.
-- [ ] Cover `DecodeResult.Failure` and `DecodeResult.FuelStatusResult`.
-- [ ] Cover `FuelStatusDecoder`, `UasDecoder`, `StatusDecoder`, and decoder companion lookup edge cases.
-- [ ] Test DTC decoding edge cases: all-zero padding, odd byte counts, unknown catalog entries, current/pending/permanent variants, and non-powertrain code families.
+- [x] Add table-driven tests for every decoder in `Decoders.kt`, not just the common subset.
+- [x] Add invalid-length, empty-data, and boundary-value cases for each decoder.
+- [x] Cover metric and imperial unit paths where applicable.
+- [x] Cover `DecodeResult.Failure` and `DecodeResult.FuelStatusResult`.
+- [x] Cover `FuelStatusDecoder`, `UasDecoder`, `StatusDecoder`, and decoder companion lookup edge cases.
+- [x] Test DTC decoding edge cases: all-zero padding, odd byte counts, unknown catalog entries, current/pending/permanent variants, and non-powertrain code families.
 - [ ] Add tests for `PIDStats`, `StatusCodeMetadata`, `ECUID`, `FrameType`, and other lightweight data helpers currently under-covered.
 
 ### P2: Parser, Catalog, Logger, Protocol Polish

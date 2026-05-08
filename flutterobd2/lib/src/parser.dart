@@ -11,7 +11,9 @@ enum FrameType {
 
   static FrameType? fromValue(int value) {
     for (var type in FrameType.values) {
-      if (type.value == value) return type;
+      if (type.value == value) {
+        return type;
+      }
     }
     return null;
   }
@@ -28,7 +30,9 @@ enum EcuId {
 
   static EcuId fromValue(int value) {
     for (var type in EcuId.values) {
-      if (type.value == value) return type;
+      if (type.value == value) {
+        return type;
+      }
     }
     return EcuId.unknown;
   }
@@ -90,7 +94,9 @@ class CanMessage implements ParsedMessage {
   EcuId get ecu => frames.isNotEmpty ? frames.first.txID : EcuId.unknown;
 
   CanMessage(this.frames) {
-    if (frames.isEmpty) throw ParserError("Invalid frame count");
+    if (frames.isEmpty) {
+      throw ParserError("Invalid frame count");
+    }
     if (frames.length == 1) {
       data = _parseSingleFrameMessage(frames);
     } else {
@@ -100,8 +106,9 @@ class CanMessage implements ParsedMessage {
 
   Uint8List _parseSingleFrameMessage(List<Frame> frames) {
     var frame = frames.first;
-    if (frame.type != FrameType.singleFrame)
+    if (frame.type != FrameType.singleFrame) {
       throw ParserError("Not a single frame");
+    }
     var dataLen = frame.dataLen;
     if (dataLen == null || dataLen <= 0 || frame.data.length < dataLen + 1) {
       throw ParserError("Frame validation failed");
@@ -315,13 +322,19 @@ class Frame {
 
     switch (type) {
       case FrameType.singleFrame:
-        if (data.isNotEmpty) dataLen = data[0] & 0x0F;
+        if (data.isNotEmpty) {
+          dataLen = data[0] & 0x0F;
+        }
         break;
       case FrameType.firstFrame:
-        if (data.length >= 2) dataLen = ((data[0] & 0x0F) << 8) + data[1];
+        if (data.length >= 2) {
+          dataLen = ((data[0] & 0x0F) << 8) + data[1];
+        }
         break;
       case FrameType.consecutiveFrame:
-        if (data.isNotEmpty) seqIndex = data[0] & 0x0F;
+        if (data.isNotEmpty) {
+          seqIndex = data[0] & 0x0F;
+        }
         break;
     }
   }

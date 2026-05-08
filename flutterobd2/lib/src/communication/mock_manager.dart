@@ -271,13 +271,7 @@ class MockManager implements CommProtocol {
 
   String _rpmBytes() {
     final speed = _speedKmh();
-    final rpm = speed <= 0.5
-        ? 800.0
-        : speed < 20.0
-            ? 800.0 + 360.0 * speed
-            : speed < 50.0
-                ? 1500.0 + (6500.0 / 30.0) * (speed - 20.0)
-                : 1800.0 + 310.0 * (speed - 50.0);
+    final rpm = _rpmFromSpeed(speed);
     final raw = (rpm.clamp(800.0, 8000.0).round()) * 4;
     final a =
         ((raw >> 8) & 0xFF).toRadixString(16).padLeft(2, '0').toUpperCase();
@@ -490,13 +484,16 @@ class MockManager implements CommProtocol {
   }
 
   double _rpmFromSpeed(double speed) {
-    return speed <= 0.5
-        ? 800.0
-        : speed < 20.0
-            ? 800.0 + 360.0 * speed
-            : speed < 50.0
-                ? 1500.0 + (6500.0 / 30.0) * (speed - 20.0)
-                : 1800.0 + 310.0 * (speed - 50.0);
+    if (speed <= 0.5) {
+      return 800.0;
+    }
+    if (speed < 20.0) {
+      return 800.0 + 360.0 * speed;
+    }
+    if (speed < 50.0) {
+      return 1500.0 + (6500.0 / 30.0) * (speed - 20.0);
+    }
+    return 1800.0 + 310.0 * (speed - 50.0);
   }
 
   String _hexByte(num value) => value

@@ -212,10 +212,14 @@ class Obd2Service implements ObdServiceDelegate {
 
     final response =
         await _sendCommandInternal(command.properties.command, retries: 1);
-    if (elm327.canProtocol == null) return {};
+    if (elm327.canProtocol == null) {
+      return {};
+    }
 
     final messages = elm327.canProtocol!.parse(response);
-    if (messages.isEmpty || messages.first.data == null) return {};
+    if (messages.isEmpty || messages.first.data == null) {
+      return {};
+    }
 
     final messageData = messages.first.data!;
     final payload =
@@ -231,28 +235,41 @@ class Obd2Service implements ObdServiceDelegate {
   }
 
   Uint8List _extractDecodePayload(String command, Uint8List data) {
-    if (data.isEmpty) return Uint8List(0);
+    if (data.isEmpty) {
+      return Uint8List(0);
+    }
 
     final pid = _parsePid(command);
-    if (pid == null) return data;
+    if (pid == null) {
+      return data;
+    }
 
-    if (command.startsWith("01")) return _extractMode1Payload(pid, data);
-    if (command.startsWith("09"))
+    if (command.startsWith("01")) {
+      return _extractMode1Payload(pid, data);
+    }
+    if (command.startsWith("09")) {
       return _extractServicePayload(0x49, pid, data);
+    }
 
     // Fallback for already-stripped payloads.
     return data;
   }
 
   int? _parsePid(String command) {
-    if (command.length < 4) return null;
+    if (command.length < 4) {
+      return null;
+    }
     return int.tryParse(command.substring(2, 4), radix: 16);
   }
 
   Uint8List _extractMode1Payload(int pid, Uint8List data) {
     final servicePayload = _extractServicePayload(0x41, pid, data);
-    if (!identical(servicePayload, data)) return servicePayload;
-    if (data[0] == pid) return Uint8List.fromList(data.sublist(1));
+    if (!identical(servicePayload, data)) {
+      return servicePayload;
+    }
+    if (data[0] == pid) {
+      return Uint8List.fromList(data.sublist(1));
+    }
     return data;
   }
 

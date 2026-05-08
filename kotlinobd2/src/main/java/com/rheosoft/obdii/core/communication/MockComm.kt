@@ -23,6 +23,202 @@ class MockComm : CommProtocol {
     private var echoEnabled = false
     private var headersEnabled = true
     private val startAt = System.currentTimeMillis()
+    private val mode1PidHandlers: Map<String, (Double, String) -> String> = buildMap {
+        put("00") { _, _ -> "41 00 FF FF FF FF" }
+        put("20") { _, _ -> "41 20 FF FF FF FF" }
+        put("40") { _, _ -> "41 40 FF FF FF FE" }
+        put("0C") { elapsed, _ ->
+            val rpm = currentMockRpm(currentMockSpeed(elapsed)).toInt().coerceIn(800, 8000)
+            val raw = rpm * 4
+            "41 0C %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        put("05") { elapsed, _ ->
+            val temp = ((elapsed.coerceIn(0.0, 60.0) / 60.0) * 100.0).toInt()
+            "41 05 %02X".format((temp + 40).coerceIn(0, 255))
+        }
+        put("42") { elapsed, _ ->
+            val volts = (13.6 + smoothNoise(elapsed, seed = 1.0, scale = 0.15)).coerceIn(12.2, 14.6)
+            val raw = (volts * 1000).toInt().coerceIn(0, 65535)
+            "41 42 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        put("01") { elapsed, _ -> composeMode1Status(elapsed) }
+        put("03") { elapsed, _ -> composeMode1FuelStatus(elapsed) }
+        put("02") { _, _ -> "41 02 03 01" }
+        put("04") { elapsed, _ -> "41 04 ${hexByte((0.1 + 0.8 * normalizedRpm(elapsed)) * 255.0)}" }
+        put("06") { elapsed, _ -> "41 06 ${fuelTrimByte(elapsed, 0.05)}" }
+        put("07") { elapsed, _ -> "41 07 ${fuelTrimByte(elapsed, 0.02)}" }
+        put("08") { elapsed, _ -> "41 08 ${fuelTrimByte(elapsed + 0.7, 0.05)}" }
+        put("09") { elapsed, _ -> "41 09 ${fuelTrimByte(elapsed + 0.7, 0.02)}" }
+        put("0A") { _, _ -> "41 0A ${hexByte((400.0 / 3.0).coerceIn(0.0, 255.0))}" }
+        put("0B") { elapsed, _ ->
+            "41 0B ${hexByte((25.0 + (normalizedRpm(elapsed) * 70.0)).coerceIn(20.0, 100.0))}"
+        }
+        put("0F") { elapsed, _ ->
+            val intake = ((elapsed.coerceIn(0.0, 60.0) / 60.0) * 70.0).toInt()
+            "41 0F %02X".format((intake + 40).coerceIn(0, 255))
+        }
+        put("0D") { elapsed, _ ->
+            val speed = currentMockSpeed(elapsed).toInt().coerceIn(0, 120)
+            "41 0D %02X".format(speed)
+        }
+        put("0E") { elapsed, _ ->
+            val adv = (10.0 + normalizedRpm(elapsed) * 25.0).coerceIn(2.0, 45.0)
+            "41 0E ${hexByte((adv + 64.0) * 2.0)}"
+        }
+        put("10") { elapsed, _ ->
+            val maf = (2.0 + normalizedRpm(elapsed) * 118.0).coerceIn(2.0, 200.0)
+            val raw = (maf * 100.0).toInt().coerceIn(0, 65535)
+            "41 10 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        put("11") { elapsed, _ ->
+            val demand = throttleDemandPercent(elapsed) / 100.0
+            "41 11 ${hexByte(demand * 255.0)}"
+        }
+        put("12") { _, _ -> "41 12 04" }
+        put("13") { _, _ -> "41 13 03" }
+        listOf("14", "15", "18", "19").forEach { requestedPid ->
+            put(requestedPid) { elapsed, pid -> "41 $pid ${o2NarrowbandBytes(elapsed, pid)}" }
+        }
+        listOf("16", "17", "1A", "1B").forEach { requestedPid ->
+            put(requestedPid) { _, pid -> "41 $pid 80 80" }
+        }
+        put("1C") { _, _ -> "41 1C 03" }
+        put("1D") { _, _ -> "41 1D 00" }
+        put("1E") { _, _ -> "41 1E 00" }
+        put("1F") { elapsed, _ ->
+            val runtime = elapsed.toInt().coerceIn(0, 65535)
+            "41 1F %02X %02X".format((runtime shr 8) and 0xFF, runtime and 0xFF)
+        }
+        listOf("21", "31").forEach { requestedPid ->
+            put(requestedPid) { elapsed, pid ->
+                val km = (currentMockSpeed(elapsed) * (elapsed / 3600.0)).toInt().coerceIn(0, 65535)
+                "41 $pid %02X %02X".format((km shr 8) and 0xFF, km and 0xFF)
+            }
+        }
+        put("22") { elapsed, _ ->
+            val kpa =
+                (300.0 + normalizedRpm(elapsed) * 100.0 + smoothNoise(elapsed, 22.0, 10.0))
+                    .coerceIn(200.0, 600.0)
+            val raw = (kpa / 10.0).toInt().coerceIn(0, 65535)
+            "41 22 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        put("23") { _, _ -> "41 23 02 BF" }
+        listOf("24", "25", "26", "27", "28", "29", "2A", "2B").forEach { requestedPid ->
+            put(requestedPid) { elapsed, pid ->
+                val mv =
+                    (2500.0 + smoothNoise(elapsed, 23.0 + pid.hexSeed(), 200.0) * 1000.0)
+                        .coerceIn(0.0, 8192.0)
+                val raw = mv.toInt().coerceIn(0, 8192)
+                "41 $pid %02X %02X 80 00".format((raw shr 8) and 0xFF, raw and 0xFF)
+            }
+        }
+        put("2C") { elapsed, _ -> "41 2C ${hexByte((0.2 + 0.2 * sin(elapsed * 0.3)) * 255.0)}" }
+        put("2D") { elapsed, _ -> "41 2D ${hexByte(128 + smoothNoise(elapsed, 24.0, 0.05) * 255.0)}" }
+        put("2E") { elapsed, _ -> "41 2E ${hexByte((0.1 + 0.3 * sin(elapsed * 0.2)) * 255.0)}" }
+        put("2F") { elapsed, _ ->
+            val fuel = (90.0 - (elapsed / 10.0)).coerceIn(0.0, 100.0)
+            "41 2F ${hexByte((fuel / 100.0) * 255.0)}"
+        }
+        put("30") { elapsed, _ ->
+            val cycles = (elapsed / 300.0).toInt().coerceIn(0, 40)
+            "41 30 00 00 %02X".format(cycles)
+        }
+        put("32") { elapsed, _ ->
+            val pa = (100 + smoothNoise(elapsed, 25.0, 50.0) * 100.0).toInt().coerceIn(-32768, 32767)
+            val raw = pa and 0xFFFF
+            "41 32 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        put("33") { elapsed, _ ->
+            val kpa = (101.0 + smoothNoise(elapsed, 9.0, 0.6)).coerceIn(95.0, 105.0)
+            "41 33 ${hexByte(kpa)}"
+        }
+        listOf("34", "35", "36", "37", "38", "39", "3A", "3B").forEach { requestedPid ->
+            put(requestedPid) { elapsed, pid -> "41 $pid ${hexByte(128 + sin(elapsed * 1.5) * 20.0)} 00" }
+        }
+        listOf("3C", "3D", "3E", "3F").forEach { requestedPid ->
+            put(requestedPid) { elapsed, pid ->
+                val tC =
+                    300.0 + 250.0 * (0.5 + 0.5 * sin(elapsed * 0.1)) +
+                        smoothNoise(elapsed, 27.0 + pid.hexSeed(), 15.0)
+                val raw = ((tC + 40.0) * 10.0).toInt().coerceIn(0, 65535)
+                "41 $pid %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+            }
+        }
+        put("41") { elapsed, _ -> composeMode1Status(elapsed).replace("41 01", "41 41") }
+        put("43") { elapsed, _ ->
+            val load = (0.1 + 0.8 * normalizedRpm(elapsed) + smoothNoise(elapsed, 28.0, 0.05)).coerceIn(0.0, 1.0)
+            val raw = (load * 65535.0).toInt().coerceIn(0, 65535)
+            "41 43 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        put("44") { elapsed, _ ->
+            val lambda = (1.0 + smoothNoise(elapsed, 29.0, 0.03)).coerceIn(0.9, 1.1)
+            val raw = (lambda * 32768.0).toInt().coerceIn(0, 65535)
+            "41 44 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        listOf("45", "47", "48", "49", "4A", "4B", "4C", "5A").forEach { requestedPid ->
+            put(requestedPid) { elapsed, pid ->
+                val pct =
+                    (0.2 + 0.4 * (0.5 + 0.5 * sin(elapsed * 0.3)) +
+                        smoothNoise(elapsed, 30.0 + pid.hexSeed(), 0.03))
+                        .coerceIn(0.0, 1.0)
+                "41 $pid ${hexByte(pct * 255.0)}"
+            }
+        }
+        put("46") { _, _ -> "41 46 32" }
+        put("4D") { _, _ -> "41 4D 00 00" }
+        put("4E") { elapsed, _ ->
+            val seconds = elapsed.toInt().coerceIn(0, 65535)
+            "41 4E %02X %02X".format((seconds shr 8) and 0xFF, seconds and 0xFF)
+        }
+        put("4F") { _, _ -> "41 4F FF FF FF FF FF" }
+        put("50") { _, _ ->
+            val maxMaf = 300.0
+            val raw = (maxMaf * 50.0).toInt().coerceIn(0, 65535)
+            "41 50 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        put("51") { _, _ -> "41 51 01" }
+        put("52") { _, _ -> "41 52 1A" }
+        listOf("53", "54").forEach { requestedPid ->
+            put(requestedPid) { elapsed, pid ->
+                val pa = (if (pid == "53") 300 else 250) + smoothNoise(elapsed, 31.0 + pid.hexSeed(), 60.0) * 100.0
+                val raw = pa.toInt().coerceIn(-32768, 32767) and 0xFFFF
+                "41 $pid %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+            }
+        }
+        listOf("55", "56", "57", "58").forEach { requestedPid ->
+            put(requestedPid) { elapsed, pid ->
+                val scale = if (pid == "56" || pid == "58") 0.03 else 0.06
+                "41 $pid ${hexByte(128 + smoothNoise(elapsed, 33.0 + pid.hexSeed(), scale) * 255.0)} 00"
+            }
+        }
+        put("59") { elapsed, _ ->
+            val kpa = (400.0 + smoothNoise(elapsed, 37.0, 40.0)).coerceIn(360.0, 440.0)
+            val raw = (kpa / 10.0).toInt().coerceIn(0, 65535)
+            "41 59 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        put("5B") { elapsed, _ ->
+            val percent = (90.0 - (elapsed / 600.0)).coerceIn(50.0, 90.0)
+            val raw = ((percent / 100.0) * 65535.0).toInt().coerceIn(0, 65535)
+            "41 5B %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        put("5C") { elapsed, _ ->
+            val temp = 20.0 + (100.0 - 20.0) * (1.0 - exp(-elapsed / 900.0)) + smoothNoise(elapsed, 11.0, 1.5)
+            "41 5C ${hexByte((temp + 40.0).coerceIn(0.0, 255.0))}"
+        }
+        put("5D") { elapsed, _ ->
+            val rpmN = normalizedRpm(elapsed)
+            val deg = (5.0 + 15.0 * (1.0 - rpmN) - 2.5 * rpmN + smoothNoise(elapsed, 12.0, 0.8)).coerceIn(-5.0, 25.0)
+            val raw = (deg * 10.0 + 21000.0).toInt().coerceIn(0, 65535)
+            "41 5D %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        put("5E") { elapsed, _ ->
+            val rpmN = normalizedRpm(elapsed)
+            val lph = (1.2 + 18.0 * rpmN + 10.0 * rpmN + smoothNoise(elapsed, 13.0, 0.8)).coerceIn(0.5, 60.0)
+            val raw = (lph * 20.0).toInt().coerceIn(0, 65535)
+            "41 5E %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
+        }
+        put("5F") { _, _ -> "41 5F 01" }
+    }
 
     override suspend fun connectAsync(timeoutMs: Long, peripheral: PeripheralInfo?) {
         stateFlow.value = AdapterConnectionState.connecting
@@ -59,205 +255,12 @@ class MockComm : CommProtocol {
     private fun composeMode1(command: String): List<String> {
         val pid = command.takeLast(2)
         val elapsed = sessionElapsed()
-        val payload = when (pid) {
-            "00" -> "41 00 FF FF FF FF"
-            "20" -> "41 20 FF FF FF FF"
-            "40" -> "41 40 FF FF FF FE"
-            "0C" -> {
-                val rpm = currentMockRpm(currentMockSpeed(elapsed)).toInt().coerceIn(800, 8000)
-                val raw = rpm * 4
-                "41 0C %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "05" -> {
-                val temp = ((elapsed.coerceIn(0.0, 60.0) / 60.0) * 100.0).toInt()
-                "41 05 %02X".format((temp + 40).coerceIn(0, 255))
-            }
-            "42" -> {
-                val volts = (13.6 + smoothNoise(elapsed, seed = 1.0, scale = 0.15)).coerceIn(12.2, 14.6)
-                val raw = (volts * 1000).toInt().coerceIn(0, 65535)
-                "41 42 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "01" -> {
-                composeMode1Status(elapsed)
-            }
-            "03" -> {
-                composeMode1FuelStatus(elapsed)
-            }
-            "02" -> "41 02 03 01"
-            "04" -> "41 04 ${hexByte((0.1 + 0.8 * normalizedRpm(elapsed)) * 255.0)}"
-            "06" -> "41 06 ${fuelTrimByte(elapsed, 0.05)}"
-            "07" -> "41 07 ${fuelTrimByte(elapsed, 0.02)}"
-            "08" -> "41 08 ${fuelTrimByte(elapsed + 0.7, 0.05)}"
-            "09" -> "41 09 ${fuelTrimByte(elapsed + 0.7, 0.02)}"
-            "0A" -> "41 0A ${hexByte((400.0 / 3.0).coerceIn(0.0, 255.0))}"
-            "0B" -> "41 0B ${hexByte((25.0 + (normalizedRpm(elapsed) * 70.0)).coerceIn(20.0, 100.0))}"
-            "0F" -> {
-                val intake = ((elapsed.coerceIn(0.0, 60.0) / 60.0) * 70.0).toInt()
-                "41 0F %02X".format((intake + 40).coerceIn(0, 255))
-            }
-            "0D" -> {
-                val speed = currentMockSpeed(elapsed).toInt().coerceIn(0, 120)
-                "41 0D %02X".format(speed)
-            }
-            "0E" -> {
-                val adv = (10.0 + normalizedRpm(elapsed) * 25.0).coerceIn(2.0, 45.0)
-                "41 0E ${hexByte((adv + 64.0) * 2.0)}"
-            }
-            "10" -> {
-                val maf = (2.0 + normalizedRpm(elapsed) * 118.0).coerceIn(2.0, 200.0)
-                val raw = (maf * 100.0).toInt().coerceIn(0, 65535)
-                "41 10 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "11" -> {
-                val demand = throttleDemandPercent(elapsed) / 100.0
-                "41 11 ${hexByte(demand * 255.0)}"
-            }
-            "12" -> "41 12 04"
-            "13" -> "41 13 03"
-            "14", "15", "18", "19" -> "41 $pid ${o2NarrowbandBytes(elapsed, pid)}"
-            "16", "17", "1A", "1B" -> "41 $pid 80 80"
-            "1C" -> "41 1C 03"
-            "1D" -> "41 1D 00"
-            "1E" -> "41 1E 00"
-            "1F" -> {
-                val runtime = elapsed.toInt().coerceIn(0, 65535)
-                "41 1F %02X %02X".format((runtime shr 8) and 0xFF, runtime and 0xFF)
-            }
-            "21", "31" -> {
-                val km = (currentMockSpeed(elapsed) * (elapsed / 3600.0)).toInt().coerceIn(0, 65535)
-                "41 $pid %02X %02X".format((km shr 8) and 0xFF, km and 0xFF)
-            }
-            "22" -> {
-                val kpa = (300.0 + normalizedRpm(elapsed) * 100.0 + smoothNoise(elapsed, 22.0, 10.0)).coerceIn(200.0, 600.0)
-                val raw = (kpa / 10.0).toInt().coerceIn(0, 65535)
-                "41 22 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "23" -> "41 23 02 BF"
-            "24", "25", "26", "27", "28", "29", "2A", "2B" -> {
-                val mv = (2500.0 + smoothNoise(elapsed, 23.0 + pid.hexSeed(), 200.0) * 1000.0).coerceIn(0.0, 8192.0)
-                val raw = mv.toInt().coerceIn(0, 8192)
-                "41 $pid %02X %02X 80 00".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "2C" -> "41 2C ${hexByte((0.2 + 0.2 * sin(elapsed * 0.3)) * 255.0)}"
-            "2D" -> "41 2D ${hexByte(128 + smoothNoise(elapsed, 24.0, 0.05) * 255.0)}"
-            "2E" -> "41 2E ${hexByte((0.1 + 0.3 * sin(elapsed * 0.2)) * 255.0)}"
-            "2F" -> {
-                val fuel = (90.0 - (elapsed / 10.0)).coerceIn(0.0, 100.0)
-                "41 2F ${hexByte((fuel / 100.0) * 255.0)}"
-            }
-            "30" -> {
-                val cycles = (elapsed / 300.0).toInt().coerceIn(0, 40)
-                "41 30 00 00 %02X".format(cycles)
-            }
-            "32" -> {
-                val pa = (100 + smoothNoise(elapsed, 25.0, 50.0) * 100.0).toInt().coerceIn(-32768, 32767)
-                val raw = pa and 0xFFFF
-                "41 32 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "33" -> {
-                val kpa = (101.0 + smoothNoise(elapsed, 9.0, 0.6)).coerceIn(95.0, 105.0)
-                "41 33 ${hexByte(kpa)}"
-            }
-            "34", "35", "36", "37", "38", "39", "3A", "3B" -> "41 $pid ${hexByte(128 + sin(elapsed * 1.5) * 20.0)} 00"
-            "3C", "3D", "3E", "3F" -> {
-                val tC = 300.0 + 250.0 * (0.5 + 0.5 * sin(elapsed * 0.1)) + smoothNoise(elapsed, 27.0 + pid.hexSeed(), 15.0)
-                val raw = ((tC + 40.0) * 10.0).toInt().coerceIn(0, 65535)
-                "41 $pid %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "41" -> composeMode1Status(elapsed).replace("41 01", "41 41")
-            "43" -> {
-                val load = (0.1 + 0.8 * normalizedRpm(elapsed) + smoothNoise(elapsed, 28.0, 0.05)).coerceIn(0.0, 1.0)
-                val raw = (load * 65535.0).toInt().coerceIn(0, 65535)
-                "41 43 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "44" -> {
-                val lambda = (1.0 + smoothNoise(elapsed, 29.0, 0.03)).coerceIn(0.9, 1.1)
-                val raw = (lambda * 32768.0).toInt().coerceIn(0, 65535)
-                "41 44 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "45", "47", "48", "49", "4A", "4B", "4C", "5A" -> {
-                val pct = (0.2 + 0.4 * (0.5 + 0.5 * sin(elapsed * 0.3)) + smoothNoise(elapsed, 30.0 + pid.hexSeed(), 0.03)).coerceIn(0.0, 1.0)
-                "41 $pid ${hexByte(pct * 255.0)}"
-            }
-            "46" -> "41 46 32"
-            "4D" -> "41 4D 00 00"
-            "4E" -> {
-                val seconds = elapsed.toInt().coerceIn(0, 65535)
-                "41 4E %02X %02X".format((seconds shr 8) and 0xFF, seconds and 0xFF)
-            }
-            "4F" -> "41 4F FF FF FF FF FF"
-            "50" -> {
-                val maxMaf = 300.0
-                val raw = (maxMaf * 50.0).toInt().coerceIn(0, 65535)
-                "41 50 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "51" -> "41 51 01"
-            "52" -> "41 52 1A"
-            "53", "54" -> {
-                val pa = (if (pid == "53") 300 else 250) + smoothNoise(elapsed, 31.0 + pid.hexSeed(), 60.0) * 100.0
-                val raw = pa.toInt().coerceIn(-32768, 32767) and 0xFFFF
-                "41 $pid %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "55", "56", "57", "58" -> "41 $pid ${hexByte(128 + smoothNoise(elapsed, 33.0 + pid.hexSeed(), if (pid == "56" || pid == "58") 0.03 else 0.06) * 255.0)} 00"
-            "59" -> {
-                val kpa = (400.0 + smoothNoise(elapsed, 37.0, 40.0)).coerceIn(360.0, 440.0)
-                val raw = (kpa / 10.0).toInt().coerceIn(0, 65535)
-                "41 59 %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "5B" -> {
-                val percent = (90.0 - (elapsed / 600.0)).coerceIn(50.0, 90.0)
-                val raw = ((percent / 100.0) * 65535.0).toInt().coerceIn(0, 65535)
-                "41 5B %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "5C" -> {
-                val temp = 20.0 + (100.0 - 20.0) * (1.0 - exp(-elapsed / 900.0)) + smoothNoise(elapsed, 11.0, 1.5)
-                "41 5C ${hexByte((temp + 40.0).coerceIn(0.0, 255.0))}"
-            }
-            "5D" -> {
-                val rpmN = normalizedRpm(elapsed)
-                val deg = (5.0 + 15.0 * (1.0 - rpmN) - 2.5 * rpmN + smoothNoise(elapsed, 12.0, 0.8)).coerceIn(-5.0, 25.0)
-                val raw = (deg * 10.0 + 21000.0).toInt().coerceIn(0, 65535)
-                "41 5D %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "5E" -> {
-                val rpmN = normalizedRpm(elapsed)
-                val lph = (1.2 + 18.0 * rpmN + 10.0 * rpmN + smoothNoise(elapsed, 13.0, 0.8)).coerceIn(0.5, 60.0)
-                val raw = (lph * 20.0).toInt().coerceIn(0, 65535)
-                "41 5E %02X %02X".format((raw shr 8) and 0xFF, raw and 0xFF)
-            }
-            "5F" -> "41 5F 01"
-            else -> NO_DATA
-        }
+        val payload = mode1PidHandlers[pid]?.invoke(elapsed, pid) ?: NO_DATA
         if (payload == NO_DATA) return listOf(payload)
         return listOf(frame(payload))
     }
 
     private fun composeMode3TroubleCodes(): List<String> {
-        val sampleCodes = listOf("P0300", "P0170", "P0101", "P0104", "P0207", "P0411", "P0420")
-        fun encodeDtc(code: String): Pair<Int, Int> {
-            val letterBits = when (code.firstOrNull()) {
-                'P' -> 0
-                'C' -> 1
-                'B' -> 2
-                'U' -> 3
-                else -> 0
-            }
-            val d1 = code.getOrNull(1)?.digitToIntOrNull(16) ?: 0
-            val d2 = code.getOrNull(2)?.digitToIntOrNull(16) ?: 0
-            val d3 = code.getOrNull(3)?.digitToIntOrNull(16) ?: 0
-            val d4 = code.getOrNull(4)?.digitToIntOrNull(16) ?: 0
-            val a = (letterBits shl 6) or (d1 shl 4) or d2
-            val b = (d3 shl 4) or d4
-            return a to b
-        }
-        val payload = mutableListOf<Int>()
-        payload += 0x43
-        payload += sampleCodes.size
-        sampleCodes.forEach { code ->
-            val (a, b) = encodeDtc(code)
-            payload += a
-            payload += b
-        }
         // Keep this multi-frame to match Swift behavior.
         return listOf(
             frame("10 10 43 07 03 00 01 70"),

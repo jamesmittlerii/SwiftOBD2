@@ -19,6 +19,6 @@ data class PeripheralInfo(
     val name: String? = null,
 )
 
-interface OBDServiceDelegate {
+fun interface OBDServiceDelegate {
     fun connectionStateChanged(state: AdapterConnectionState)
 }

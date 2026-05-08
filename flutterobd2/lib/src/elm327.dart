@@ -316,9 +316,14 @@ class Elm327 {
     final raw = messages.first.data!;
     // Expected for Mode 01 support responses: 41 <getterPid> <4-byte bitmap...>
     // Keep parser resilient if a transport already stripped mode/pid bytes.
-    final data = (raw.length >= 6 && raw[0] == 0x41)
-        ? raw.sublist(2)
-        : (raw.length > 4 ? raw.sublist(raw.length - 4) : raw);
+    final List<int> data;
+    if (raw.length >= 6 && raw[0] == 0x41) {
+      data = raw.sublist(2);
+    } else if (raw.length > 4) {
+      data = raw.sublist(raw.length - 4);
+    } else {
+      data = raw;
+    }
     var binaryData = <int>[];
     for (var b in data) {
       for (int i = 7; i >= 0; i--) {

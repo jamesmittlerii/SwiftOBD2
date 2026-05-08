@@ -8,16 +8,16 @@ import org.junit.jupiter.api.Test
 class ProtocolTest {
 
     private val can11Protocols = listOf(
-        ISO_15765_4_11bit_500k(),
-        ISO_15765_4_11bit_250K()
+        Iso157654Can11Bit500K(),
+        Iso157654Can11Bit250K()
     )
 
     private val legacyProtocols = listOf(
-        SAE_J1850_PWM(),
-        SAE_J1850_VPW(),
-        ISO_9141_2(),
-        ISO_14230_4_KWP_5Baud(),
-        ISO_14230_4_KWP_Fast()
+        SaeJ1850Pwm(),
+        SaeJ1850Vpw(),
+        Iso91412(),
+        Iso142304Kwp5Baud(),
+        Iso142304KwpFast()
     )
 
     @Test
