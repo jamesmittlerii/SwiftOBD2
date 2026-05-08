@@ -1,0 +1,62 @@
+name: SonarCloud
+
+permissions:
+  contents: read
+  pull-requests: read
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  scan:
+    name: Test Coverage & Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }} # Required for private submodules
+
+     
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          pub-cache: true
+
+      - name: Install Flutter dependencies
+        working-directory: flutterobd2
+        run: flutter pub get
+
+      - name: Generate Flutter coverage
+        working-directory: flutterobd2
+        run: flutter test --coverage
+
+      - name: Make Kotlin Gradle wrapper executable
+        working-directory: kotlinobd2
+        run: chmod +x gradlew
+
+      - name: Generate Kotlin JaCoCo coverage
+        working-directory: kotlinobd2
+        run: ./gradlew :test :jacocoTestReport
+
+      - name: SonarCloud scan
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
