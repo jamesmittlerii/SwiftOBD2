@@ -25,7 +25,47 @@ enum CommunicationError: Error {
     case connectionTimedOut
 }
 
-class WifiManager: CommProtocol {
+private final class WifiConnectionAttemptState: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "com.rheosoft.obdii.wifi.connectionAttemptState")
+    private var didResume = false
+    private var timeoutWorkItem: DispatchWorkItem?
+
+    func setTimeoutWorkItem(_ workItem: DispatchWorkItem?) {
+        queue.sync {
+            timeoutWorkItem = workItem
+        }
+    }
+
+    func cancelTimeoutWorkItem() {
+        queue.sync {
+            timeoutWorkItem?.cancel()
+        }
+    }
+
+    func resumeSuccess(_ continuation: CheckedContinuation<Void, Error>) {
+        let shouldResume = queue.sync { () -> Bool in
+            guard !didResume else { return false }
+            didResume = true
+            return true
+        }
+
+        guard shouldResume else { return }
+        continuation.resume()
+    }
+
+    func resumeFailure(_ continuation: CheckedContinuation<Void, Error>, error: Error) {
+        let shouldResume = queue.sync { () -> Bool in
+            guard !didResume else { return false }
+            didResume = true
+            return true
+        }
+
+        guard shouldResume else { return }
+        continuation.resume(throwing: error)
+    }
+}
+
+final class WifiManager: CommProtocol, @unchecked Sendable {
     @Published var connectionState: ConnectionState = .disconnected
 
     var obdDelegate: OBDServiceDelegate?
@@ -56,22 +96,17 @@ class WifiManager: CommProtocol {
 
         // Use a task group or a manual timer to manage the total timeout
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            var timeoutWorkItem: DispatchWorkItem?
-            var didResume = false
-            
-            func completeSuccess() {
-                guard !didResume else { return }
-                didResume = true
-                continuation.resume()
+            let connectionAttemptState = WifiConnectionAttemptState()
+
+            let completeSuccess: @Sendable () -> Void = {
+                connectionAttemptState.resumeSuccess(continuation)
             }
-            
-            func completeWithError(_ error: Error) {
-                guard !didResume else { return }
-                didResume = true
-                continuation.resume(throwing: error)
+
+            let completeWithError: @Sendable (Error) -> Void = { error in
+                connectionAttemptState.resumeFailure(continuation, error: error)
             }
-            
-            func publishDisconnected() {
+
+            let publishDisconnected: @Sendable () -> Void = { [self] in
                 if self.connectionState != .disconnected {
                     self.connectionState = .disconnected
                     DispatchQueue.main.async {
@@ -79,16 +114,16 @@ class WifiManager: CommProtocol {
                     }
                 }
             }
-            
-            func handleTerminalFailure(_ error: NWError) {
-                timeoutWorkItem?.cancel()
+
+            let handleTerminalFailure: @Sendable (NWError) -> Void = { [self] error in
+                connectionAttemptState.cancelTimeoutWorkItem()
                 obdError("Connection failed: \(error.localizedDescription)", category: .wifi)
                 self.tcp?.cancel()
                 publishDisconnected()
                 completeWithError(CommunicationError.errorOccurred(error))
             }
-            
-            func isTerminalWaitingError(_ error: NWError) -> Bool {
+
+            let isTerminalWaitingError: @Sendable (NWError) -> Bool = { error in
                 switch error {
                 case .posix(let code):
                     // Treat connection refused/unreachable as terminal for your tool
@@ -103,9 +138,9 @@ class WifiManager: CommProtocol {
                     return false
                 }
             }
-            
+
             // Define a function to handle the timeout cancellation
-            let cancelOnTimeout = { [weak self] in
+            let cancelOnTimeout: @Sendable () -> Void = { [weak self] in
                 guard let self = self else { return }
                 if self.connectionState != .connectedToAdapter {
                     obdError("Total connection timeout exceeded. Cancelling connection.", category: .wifi)
@@ -116,15 +151,16 @@ class WifiManager: CommProtocol {
             }
             
             // Schedule the manual timeout
-            timeoutWorkItem = DispatchWorkItem(block: cancelOnTimeout)
-            DispatchQueue.main.asyncAfter(deadline: .now() + totalTimeout, execute: timeoutWorkItem!)
+            let timeoutWorkItem = DispatchWorkItem(block: cancelOnTimeout)
+            connectionAttemptState.setTimeoutWorkItem(timeoutWorkItem)
+            DispatchQueue.main.asyncAfter(deadline: .now() + totalTimeout, execute: timeoutWorkItem)
             
             tcp?.stateUpdateHandler = { [weak self] newState in
                 guard let self = self else { return }
                 switch newState {
                 case .ready:
                     // If successful, cancel the pending timeout work item
-                    timeoutWorkItem?.cancel()
+                    connectionAttemptState.cancelTimeoutWorkItem()
                     obdInfo("Connected to \(self.host.debugDescription):\(self.port.debugDescription)", category: .wifi)
                     self.connectionState = .connectedToAdapter
                     completeSuccess()

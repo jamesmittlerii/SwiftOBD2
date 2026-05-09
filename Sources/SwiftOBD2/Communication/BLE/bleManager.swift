@@ -85,6 +85,11 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
 
     // Timeout task for connection attempts
     private var connectTimeoutTask: Task<Void, Never>?
+
+    @MainActor
+    private func notifyConnectionStateChanged(_ state: ConnectionState) {
+        obdDelegate?.connectionStateChanged(state: state)
+    }
     
     deinit {
         // Clean up resources
@@ -221,9 +226,7 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
                 let old = self.connectionState
                 self.connectionState = .error
                 OBDLogger.shared.logConnectionChange(from: old, to: self.connectionState)
-                DispatchQueue.main.async {
-                    self.obdDelegate?.connectionStateChanged(state: .error)
-                }
+                await self.notifyConnectionStateChanged(.error)
             }
         }
         
@@ -494,4 +497,3 @@ enum BLEManagerError: Error, CustomStringConvertible {
         }
     }
 }
-
