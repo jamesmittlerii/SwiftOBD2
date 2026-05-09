@@ -32,37 +32,17 @@ public struct TroubleCode: Codable, Hashable, Comparable {
     public var severity: Severity
 }
 
-/// Determines the severity of a trouble code based on a set of predefined rules.
-/// - Warning: This is a simplified heuristic and may not be accurate for all codes. It's recommended to consult a professional mechanic or official documentation for precise severity information.
-/// - Parameter code: The trouble code string (e.g., "P0300").
-/// - Returns: The estimated `Severity` of the code.
 private func determineSeverity(for code: String) -> Severity {
-    // Critical Issues: Directly affect safety or risk immediate and severe engine damage.
-    // Misfires, Overheating, Overspeed, Overboost, Critical ECU failures, Severe fuel pressure issues.
-    let criticalCodes = ["P0087", "P0088", "P0217", "P0218", "P0219", "P0234", "P0606"]
-    if criticalCodes.contains(code) || code.hasPrefix("P030") || code.hasPrefix("P031") {
+    switch troubleCodeSeverityLevel(for: code) {
+    case .low:
+        return .low
+    case .moderate:
+        return .moderate
+    case .high:
+        return .high
+    case .critical:
         return .critical
     }
-
-    // High Severity Issues: Can cause poor performance, potential engine damage if ignored.
-    // Fuel trim, knock sensors, crank/cam sensors, ignition coils, most transmission issues, critical comms loss.
-    let highSeverityPrefixes = ["P017", "P032", "P033", "P034", "P035", "P036", "P039"]
-    let highSeverityCodes = ["U0121", "U0151"]
-    if highSeverityCodes.contains(code) ||
-       highSeverityPrefixes.contains(where: { code.hasPrefix($0) }) ||
-       code.hasPrefix("P07") || code.hasPrefix("P08") {
-        return .high
-    }
-    
-    // Low Severity Issues: Mostly related to emissions.
-    // Catalyst efficiency, EVAP system, secondary air injection.
-    let lowSeverityPrefixes = ["P041", "P042", "P043", "P044", "P045", "P049"]
-    if lowSeverityPrefixes.contains(where: { code.hasPrefix($0) }) {
-        return .low
-    }
-
-    // Default to moderate for all other codes.
-    return .moderate
 }
 
 let codeDescriptions: [String: String] = [

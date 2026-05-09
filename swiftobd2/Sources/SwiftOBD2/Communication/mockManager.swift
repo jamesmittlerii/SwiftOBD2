@@ -286,6 +286,11 @@ class MOCKComm: CommProtocol {
 // MARK: - Per-session mock generation (moved from OBDCommand extension)
 
 private extension MOCKComm {
+    enum OscillationWaveform {
+        case sine
+        case cosine
+    }
+
     // Session time helpers
     func sessionElapsed(now: Date = Date()) -> Double {
         // Initialize start on first call
@@ -367,6 +372,63 @@ private extension MOCKComm {
             // Gear 3: 50→70 hits 8000 (starting around ~1800 at 50)
             return 1800.0 + 310.0 * (speedValue - 50.0)
         }
+    }
+
+    func mockTemperatureRampResponse(pid: String, maxCelsius: Double) -> String {
+        let elapsed = min(max(sessionElapsed(), 0.0), 60.0)
+        let tempC = (elapsed / 60.0) * maxCelsius
+        let raw = UInt8(clamping: Int((tempC + 40.0).rounded()))
+        return "\(pid) " + String(format: "%02X", raw)
+    }
+
+    func mockFuelTrimResponse(pid: String, waveform: OscillationWaveform, frequency: Double, amplitude: Double) -> String {
+        let phase = sessionElapsed() * frequency
+        let oscillation: Double
+        switch waveform {
+        case .sine:
+            oscillation = sin(phase)
+        case .cosine:
+            oscillation = cos(phase)
+        }
+        let trim = 128 + Int((oscillation * amplitude * 255.0).rounded())
+        let trimByte = UInt8(clamping: trim)
+        return "\(pid) " + String(format: "%02X", trimByte)
+    }
+
+    func mockO2SensorResponse(
+        pid: String,
+        baseVoltage: Double,
+        voltageSeed: Double,
+        voltageScale: Double,
+        trimSeed: Double,
+        trimScale: Double
+    ) -> String {
+        let voltage = max(0.1, min(0.9, baseVoltage + smoothNoise(seed: voltageSeed, scale: voltageScale)))
+        let voltageByte = UInt8(clamping: Int((voltage / 1.275) * 255.0))
+        let trimByte = UInt8(clamping: 128 + Int(smoothNoise(seed: trimSeed, scale: trimScale) * 255.0))
+        return "\(pid) " + String(format: "%02X %02X", voltageByte, trimByte)
+    }
+
+    func mockAccumulatedDistanceResponse(pid: String) -> String {
+        _ = sessionElapsed()
+        let kilometers = sessionState.accumulatedMeters / 1000.0
+        let raw = max(0, min(65535, Int(kilometers.rounded())))
+        let highByte = (raw >> 8) & 0xFF
+        let lowByte = raw & 0xFF
+        return "\(pid) " + String(format: "%02X %02X", highByte, lowByte)
+    }
+
+    func mockSignedPressureResponse(pid: String, baseline: Double, seed: Double, scale: Double) -> String {
+        let pressure = Int(baseline + smoothNoise(seed: seed, scale: scale) * 100.0)
+        let raw = UInt16(bitPattern: Int16(clamping: pressure))
+        let highByte = Int((raw >> 8) & 0xFF)
+        let lowByte = Int(raw & 0xFF)
+        return "\(pid) " + String(format: "%02X %02X", highByte, lowByte)
+    }
+
+    func mockCenteredTrimResponse(pid: String, seed: Double, scale: Double) -> String {
+        let trimByte = UInt8(clamping: 128 + Int(smoothNoise(seed: seed, scale: scale) * 255.0))
+        return "\(pid) " + String(format: "%02X 00", trimByte)
     }
 
     // MARK: - Mock Response Helpers by Command Type
@@ -495,15 +557,15 @@ private extension MOCKComm {
         case .engineLoad:
             return mockEngineLoadResponse()
         case .coolantTemp:
-            return mockCoolantTempResponse()
+            return mockTemperatureRampResponse(pid: "05", maxCelsius: 100.0)
         case .shortFuelTrim1:
-            return mockShortFuelTrim1Response()
+            return mockFuelTrimResponse(pid: "06", waveform: .sine, frequency: 1.7, amplitude: 0.05)
         case .longFuelTrim1:
-            return mockLongFuelTrim1Response()
+            return mockFuelTrimResponse(pid: "07", waveform: .sine, frequency: 0.2, amplitude: 0.02)
         case .shortFuelTrim2:
-            return mockShortFuelTrim2Response()
+            return mockFuelTrimResponse(pid: "08", waveform: .cosine, frequency: 1.5, amplitude: 0.05)
         case .longFuelTrim2:
-            return mockLongFuelTrim2Response()
+            return mockFuelTrimResponse(pid: "09", waveform: .cosine, frequency: 0.25, amplitude: 0.02)
         case .fuelPressure:
             return mockFuelPressureResponse()
         case .intakePressure:
@@ -515,7 +577,7 @@ private extension MOCKComm {
         case .timingAdvance:
             return mockTimingAdvanceResponse()
         case .intakeTemp:
-            return mockIntakeTempResponse()
+            return mockTemperatureRampResponse(pid: "0F", maxCelsius: 70.0)
         case .maf:
             return mockMAFResponse()
         case .throttlePos:
@@ -553,13 +615,13 @@ private extension MOCKComm {
         case .fuelStatus:
             return mockFuelStatusResponse()
         case .O2Bank1Sensor1:
-            return mockO2Bank1Sensor1Response()
+            return mockO2SensorResponse(pid: "14", baseVoltage: 0.5, voltageSeed: 14, voltageScale: 0.3, trimSeed: 15, trimScale: 0.05)
         case .O2Bank1Sensor2:
-            return mockO2Bank1Sensor2Response()
+            return mockO2SensorResponse(pid: "15", baseVoltage: 0.55, voltageSeed: 16, voltageScale: 0.25, trimSeed: 17, trimScale: 0.04)
         case .O2Bank2Sensor1:
-            return mockO2Bank2Sensor1Response()
+            return mockO2SensorResponse(pid: "18", baseVoltage: 0.48, voltageSeed: 18, voltageScale: 0.28, trimSeed: 19, trimScale: 0.05)
         case .O2Bank2Sensor2:
-            return mockO2Bank2Sensor2Response()
+            return mockO2SensorResponse(pid: "19", baseVoltage: 0.52, voltageSeed: 20, voltageScale: 0.22, trimSeed: 21, trimScale: 0.04)
         case .O2Sensor1WRVolatage,
              .O2Sensor2WRVolatage,
              .O2Sensor3WRVolatage,
@@ -594,17 +656,17 @@ private extension MOCKComm {
         case .commandedEquivRatio:
             return mockCommandedEquivRatioResponse()
         case .evapVaporPressureAbs:
-            return mockEvapVaporPressureAbsResponse()
+            return mockSignedPressureResponse(pid: "53", baseline: 300, seed: 31, scale: 50.0)
         case .evapVaporPressureAlt:
-            return mockEvapVaporPressureAltResponse()
+            return mockSignedPressureResponse(pid: "54", baseline: 250, seed: 32, scale: 60.0)
         case .shortO2TrimB1:
-            return mockShortO2TrimB1Response()
+            return mockCenteredTrimResponse(pid: "55", seed: 33, scale: 0.06)
         case .longO2TrimB1:
-            return mockLongO2TrimB1Response()
+            return mockCenteredTrimResponse(pid: "56", seed: 34, scale: 0.03)
         case .shortO2TrimB2:
-            return mockShortO2TrimB2Response()
+            return mockCenteredTrimResponse(pid: "57", seed: 35, scale: 0.06)
         case .longO2TrimB2:
-            return mockLongO2TrimB2Response()
+            return mockCenteredTrimResponse(pid: "58", seed: 36, scale: 0.03)
         default:
             return nil
         }
@@ -615,11 +677,11 @@ private extension MOCKComm {
         case .status:
             return mockStatusResponse()
         case .distanceWMIL:
-            return mockDistanceWMILResponse()
+            return mockAccumulatedDistanceResponse(pid: "21")
         case .warmUpsSinceDTCCleared:
             return mockWarmUpsSinceDTCClearedResponse()
         case .distanceSinceDTCCleared:
-            return mockDistanceSinceDTCClearedResponse()
+            return mockAccumulatedDistanceResponse(pid: "31")
         case .barometricPressure:
             return mockBarometricPressureResponse()
         case .statusDriveCycle:
@@ -759,40 +821,6 @@ private extension MOCKComm {
         return "04 " + String(format: "%02X", percent)
     }
 
-    private func mockCoolantTempResponse() -> String {
-        let now = Date()
-        if sessionState.testStart == nil { sessionState.testStart = now }
-        let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
-        let clamped = max(0.0, min(60.0, elapsed))
-        let tempC = Int((clamped / 60.0) * 100.0)
-        let rawA = UInt8(max(0, min(140, tempC + 40)))
-        return "05 " + String(format: "%02X", rawA)
-    }
-
-    private func mockShortFuelTrim1Response() -> String {
-        let trim = 128 + Int((sin(sessionElapsed() * 1.7) * 0.05 * 255.0).rounded())
-        let trimByte = UInt8(clamping: trim)
-        return "06 " + String(format: "%02X", trimByte)
-    }
-
-    private func mockLongFuelTrim1Response() -> String {
-        let trim = 128 + Int((sin(sessionElapsed() * 0.2) * 0.02 * 255.0).rounded())
-        let trimByte = UInt8(clamping: trim)
-        return "07 " + String(format: "%02X", trimByte)
-    }
-
-    private func mockShortFuelTrim2Response() -> String {
-        let trim = 128 + Int((cos(sessionElapsed() * 1.5) * 0.05 * 255.0).rounded())
-        let trimByte = UInt8(clamping: trim)
-        return "08 " + String(format: "%02X", trimByte)
-    }
-
-    private func mockLongFuelTrim2Response() -> String {
-        let trim = 128 + Int((cos(sessionElapsed() * 0.25) * 0.02 * 255.0).rounded())
-        let trimByte = UInt8(clamping: trim)
-        return "09 " + String(format: "%02X", trimByte)
-    }
-
     private func mockFuelPressureResponse() -> String {
         let centerKPa = 400.0 + smoothNoise(seed: 6, scale: 25.0)
         let kPa = max(200.0, min(600.0, centerKPa))
@@ -855,18 +883,6 @@ private extension MOCKComm {
         return "0E " + String(format: "%02X", timingByte)
     }
 
-    private func mockIntakeTempResponse() -> String {
-        let now = Date()
-        if sessionState.testStart == nil {
-            sessionState.testStart = now
-        }
-        let elapsed = now.timeIntervalSince(sessionState.testStart ?? now)
-        let clamped = max(0.0, min(60.0, elapsed))
-        let tempC = Int((clamped / 60.0) * 70.0)
-        let rawA = UInt8(max(0, min(140, tempC + 40)))
-        return "0F " + String(format: "%02X", rawA)
-    }
-
     private func mockMAFResponse() -> String {
         let speedValue = currentMockSpeed()
         let rpm = currentMockRPM(fromSpeed: speedValue)
@@ -927,34 +943,6 @@ private extension MOCKComm {
         return "11 " + String(format: "%02X", throttleByte)
     }
 
-    private func mockO2Bank1Sensor1Response() -> String {
-        let v = max(0.1, min(0.9, 0.5 + smoothNoise(seed: 14, scale: 0.3)))
-        let voltageByte = UInt8(clamping: Int((v / 1.275) * 255.0))
-        let trimByte = UInt8(128 + Int((smoothNoise(seed: 15, scale: 0.05) * 255.0)))
-        return "14 " + String(format: "%02X %02X", voltageByte, trimByte)
-    }
-
-    private func mockO2Bank1Sensor2Response() -> String {
-        let v = max(0.1, min(0.9, 0.55 + smoothNoise(seed: 16, scale: 0.25)))
-        let voltageByte = UInt8(clamping: Int((v / 1.275) * 255.0))
-        let trimByte = UInt8(128 + Int((smoothNoise(seed: 17, scale: 0.04) * 255.0)))
-        return "15 " + String(format: "%02X %02X", voltageByte, trimByte)
-    }
-
-    private func mockO2Bank2Sensor1Response() -> String {
-        let v = max(0.1, min(0.9, 0.48 + smoothNoise(seed: 18, scale: 0.28)))
-        let voltageByte = UInt8(clamping: Int((v / 1.275) * 255.0))
-        let trimByte = UInt8(128 + Int((smoothNoise(seed: 19, scale: 0.05) * 255.0)))
-        return "18 " + String(format: "%02X %02X", voltageByte, trimByte)
-    }
-
-    private func mockO2Bank2Sensor2Response() -> String {
-        let v = max(0.1, min(0.9, 0.52 + smoothNoise(seed: 20, scale: 0.22)))
-        let voltageByte = UInt8(clamping: Int((v / 1.275) * 255.0))
-        let trimByte = UInt8(128 + Int((smoothNoise(seed: 21, scale: 0.04) * 255.0)))
-        return "19 " + String(format: "%02X %02X", voltageByte, trimByte)
-    }
-
     private func mockRunTimeResponse() -> String {
         _ = sessionElapsed()
         let seconds = Int(sessionState.accumulatedSeconds.rounded())
@@ -962,15 +950,6 @@ private extension MOCKComm {
         let highByte = (raw >> 8) & 0xFF
         let lowByte = raw & 0xFF
         return "1F " + String(format: "%02X %02X", highByte, lowByte)
-    }
-
-    private func mockDistanceWMILResponse() -> String {
-        _ = sessionElapsed()
-        let km = sessionState.accumulatedMeters / 1000.0
-        let raw = max(0, min(65535, Int(km.rounded())))
-        let highByte = (raw >> 8) & 0xFF
-        let lowByte = 0xFF & raw
-        return "21 " + String(format: "%02X %02X", highByte, lowByte)
     }
 
     private func mockFuelRailPressureVacResponse() -> String {
@@ -1026,15 +1005,6 @@ private extension MOCKComm {
     private func mockWarmUpsSinceDTCClearedResponse() -> String {
         let cycles = min(40, Int(sessionElapsed() / 300.0))
         return "30 " + String(format: "00 00 %02X", cycles)
-    }
-
-    private func mockDistanceSinceDTCClearedResponse() -> String {
-        _ = sessionElapsed()
-        let km = sessionState.accumulatedMeters / 1000.0
-        let raw = max(0, min(65535, Int(km.rounded())))
-        let highByte = (raw >> 8) & 0xFF
-        let lowByte = raw & 0xFF
-        return "31 " + String(format: "%02X %02X", highByte, lowByte)
     }
 
     private func mockEvapVaporPressureResponse() -> String {
@@ -1164,42 +1134,6 @@ private extension MOCKComm {
         let highByte = (raw >> 8) & 0xFF
         let lowByte = raw & 0xFF
         return "50 " + String(format: "%02X %02X", highByte, lowByte)
-    }
-
-    private func mockEvapVaporPressureAbsResponse() -> String {
-        let pa = Int(300 + smoothNoise(seed: 31, scale: 50.0) * 100.0)
-        let raw = UInt16(bitPattern: Int16(clamping: pa))
-        let highByte = Int((raw >> 8) & 0xFF)
-        let lowByte = Int(raw & 0xFF)
-        return "53 " + String(format: "%02X %02X", highByte, lowByte)
-    }
-
-    private func mockEvapVaporPressureAltResponse() -> String {
-        let pa = Int(250 + smoothNoise(seed: 32, scale: 60.0) * 100.0)
-        let raw = UInt16(bitPattern: Int16(clamping: pa))
-        let highByte = Int((raw >> 8) & 0xFF)
-        let lowByte = Int(raw & 0xFF)
-        return "54 " + String(format: "%02X %02X", highByte, lowByte)
-    }
-
-    private func mockShortO2TrimB1Response() -> String {
-        let trimByte = UInt8(clamping: 128 + Int((smoothNoise(seed: 33, scale: 0.06) * 255.0)))
-        return "55 " + String(format: "%02X 00", trimByte)
-    }
-
-    private func mockLongO2TrimB1Response() -> String {
-        let trimByte = UInt8(clamping: 128 + Int((smoothNoise(seed: 34, scale: 0.03) * 255.0)))
-        return "56 " + String(format: "%02X 00", trimByte)
-    }
-
-    private func mockShortO2TrimB2Response() -> String {
-        let trimByte = UInt8(clamping: 128 + Int((smoothNoise(seed: 35, scale: 0.06) * 255.0)))
-        return "57 " + String(format: "%02X 00", trimByte)
-    }
-
-    private func mockLongO2TrimB2Response() -> String {
-        let trimByte = UInt8(clamping: 128 + Int((smoothNoise(seed: 36, scale: 0.03) * 255.0)))
-        return "58 " + String(format: "%02X 00", trimByte)
     }
 
     private func mockFuelRailPressureAbsResponse() -> String {
