@@ -57,7 +57,6 @@ public class OBDLogger {
         log(message, level: .info, category: category, file: file, function: function, line: line)
     }
     
-    // fixme - not sure what level to use for warning??
     public func warning(_ message: String, category: Category = .error, file: String = #file, function: String = #function, line: Int = #line) {
         log(message, level: .default, category: category, file: file, function: function, line: line)
     }

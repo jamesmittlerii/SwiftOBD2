@@ -1032,12 +1032,10 @@ extension OBDCommand.Mode1 {
 
 extension OBDCommand {
 	public var detailedDescription: String? {
-        switch self {
-        case .mode1(let mode1):
+        if case let .mode1(mode1) = self {
             return mode1.detailedDescription
-        default:
-            return nil
         }
+        return nil
     }
 }
 
