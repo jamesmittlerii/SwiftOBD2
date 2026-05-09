@@ -40,7 +40,7 @@ if os.path.exists(lcov_path):
             elif line == 'end_of_record':
                 cur = None
 
-root = ET.Element('coverage')
+root = ET.Element('coverage', {'version': '1'})
 for path, lines in files.items():
     if not any(seg in path for seg in ('Sources/', 'Source/', '/SwiftOBD2', 'SwiftOBD2/Sources')):
         continue
