@@ -8,11 +8,11 @@
 import XCTest
 
 let LEGACY_PROTOCOLS: [CANProtocol] = [
-    SAE_J1850_PWM(),
-    SAE_J1850_VPW(),
-    ISO_9141_2(),
-    ISO_14230_4_KWP_5Baud(),
-    ISO_14230_4_KWP_Fast(),
+    SaeJ1850Pwm(),
+    SaeJ1850Vpw(),
+    Iso91412(),
+    Iso142304Kwp5Baud(),
+    Iso142304KwpFast(),
 ]
 
 final class test_protocol_legacy: XCTestCase {

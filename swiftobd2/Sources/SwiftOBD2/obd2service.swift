@@ -139,7 +139,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             /* DELETE THIS
              
              BMW was sending multiple messages for 0100
-            let myProtocol = ISO_15765_4_11bit_500k()
+            let myProtocol = Iso157654Can11Bit500k()
             let r100: [String] = ["7EB06410098188001","7E8064100BE3EA813","7ED06410098188001","7EF06410098188001"]
             let messages = try myProtocol.parse(r100)
              */

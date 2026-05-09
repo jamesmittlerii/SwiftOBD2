@@ -388,11 +388,10 @@ struct FuelRateDecoder: Decoder {
         let fuelRateLph = Double((highByte << 8) | lowByte) * 0.05
 
         let result: MeasurementResult
-        switch unit {
-        case .imperial:
+        if unit == .imperial {
             let gph = fuelRateLph * 0.264172
             result = MeasurementResult(value: gph, unit: .gallonsPerHour)
-        default:
+        } else {
             result = MeasurementResult(value: fuelRateLph, unit: .litersPerHour)
         }
 

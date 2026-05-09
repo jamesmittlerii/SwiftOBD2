@@ -423,8 +423,8 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
 /// and handle the delegate methods.
 extension BLEManager: CBCentralManagerDelegate {
 
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        didDiscover(central, peripheral: peripheral, advertisementData: advertisementData, rssi: RSSI)
+    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi rssiValue: NSNumber) {
+        didDiscover(central, peripheral: peripheral, advertisementData: advertisementData, rssi: rssiValue)
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {

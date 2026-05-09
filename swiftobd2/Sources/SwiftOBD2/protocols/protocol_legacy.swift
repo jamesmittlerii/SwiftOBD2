@@ -164,7 +164,7 @@ public protocol MessageProtocol {
     var ecu: ECUID { get }
 }
 
-class SAE_J1850_PWM: CANProtocol {
+class SaeJ1850Pwm: CANProtocol {
     let elmID = "1"
     let name = "SAE J1850 PWM"
     func parse(_ lines: [String]) throws -> [MessageProtocol] {
@@ -172,7 +172,7 @@ class SAE_J1850_PWM: CANProtocol {
     }
 }
 
-class SAE_J1850_VPW: CANProtocol {
+class SaeJ1850Vpw: CANProtocol {
     let elmID = "2"
     let name = "SAE J1850 VPW"
     func parse(_ lines: [String]) throws -> [MessageProtocol] {
@@ -180,7 +180,7 @@ class SAE_J1850_VPW: CANProtocol {
     }
 }
 
-class ISO_9141_2: CANProtocol {
+class Iso91412: CANProtocol {
     let elmID = "3"
     let name = "ISO 9141-2"
     func parse(_ lines: [String]) throws -> [MessageProtocol] {
@@ -188,7 +188,7 @@ class ISO_9141_2: CANProtocol {
     }
 }
 
-class ISO_14230_4_KWP_5Baud: CANProtocol {
+class Iso142304Kwp5Baud: CANProtocol {
     let elmID = "4"
     let name = "ISO 14230-4 KWP (5 baud init)"
     func parse(_ lines: [String]) throws -> [MessageProtocol] {
@@ -196,7 +196,7 @@ class ISO_14230_4_KWP_5Baud: CANProtocol {
     }
 }
 
-public class ISO_14230_4_KWP_Fast: CANProtocol {
+public class Iso142304KwpFast: CANProtocol {
     let elmID = "5"
     let name = "ISO 14230-4 KWP (fast init)"
     public init() {

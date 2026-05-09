@@ -8,8 +8,8 @@
 import XCTest
 
 let CAN_11_PROTOCOLS: [CANProtocol] = [
-    ISO_15765_4_11bit_500k(),
-    ISO_15765_4_11bit_250K(),
+    Iso157654Can11Bit500k(),
+    Iso157654Can11Bit250k(),
 ]
 
 final class test_protocol_can: XCTestCase {

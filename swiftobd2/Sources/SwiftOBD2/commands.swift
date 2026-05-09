@@ -779,10 +779,9 @@ extension OBDCommand {
 
 extension OBDCommand {
 	public var detailedDescription: String? {
-		switch self {
-			case .mode1(let mode1):
-				switch mode1 {
-					case .status: return "Monitor Status of the vehicle's systems"
+		if case let .mode1(mode1) = self {
+			switch mode1 {
+						case .status: return "Monitor Status of the vehicle's systems"
 					case .freezeDTC: return """
 						The Freeze DTC (Diagnostic Trouble Codes) PID is used to retrieve trouble codes that were stored in the vehicle's ECU (Engine Control Unit) when a fault condition was detected. Specifically, Freeze DTC will provide the trouble codes for faults that triggered the Malfunction Indicator Light (MIL), also known as the Check Engine Light (CEL).
 
@@ -1029,9 +1028,9 @@ extension OBDCommand {
 					case .fuelInjectionTiming: return "The Fuel Injection Timing PID provides the timing of fuel injection relative to the crankshaft position, typically expressed in degrees before or after top dead center (BTDC/ATDC). This is essential for understanding combustion efficiency, engine performance, and diagnosing timing-related issues."
 					case .fuelRate: return "The Fuel Flow Rate PID reports the rate at which fuel is being consumed by the engine. It is typically expressed in liters per hour (L/h) or gallons per hour (GPH), and is useful for monitoring fuel efficiency, consumption trends, and overall engine performance."
 					case .emissionsReq: return "The Emissions Requirements PID provides information about the status of emissions system readiness and compliance with the vehicle’s emission control systems. This PID is often used to check if the vehicle is ready for an emissions inspection or if any emission-related issues are affecting the vehicle’s systems."
-					default: return nil
-				}
-			default: return nil
+						default: return nil
+					}
+			}
+		return nil
 		}
 	}
-}
