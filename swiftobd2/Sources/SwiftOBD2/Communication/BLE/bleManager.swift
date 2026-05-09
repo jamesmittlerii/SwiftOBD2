@@ -59,7 +59,7 @@ enum BLEConstants {
 class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
     // Replaced with centralized logging - see connectionStateDidChange for usage
 
-    static let RestoreIdentifierKey: String = "OBD2Adapter"
+    static let restoreIdentifierKey: String = "OBD2Adapter"
 
     // MARK: Properties
 
@@ -112,7 +112,7 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
             queue: bleQueue,
             options: [
                 CBCentralManagerOptionShowPowerAlertKey: true,
-                CBCentralManagerOptionRestoreIdentifierKey: BLEManager.RestoreIdentifierKey,
+                CBCentralManagerOptionRestoreIdentifierKey: BLEManager.restoreIdentifierKey,
             ]
         )
 
@@ -423,8 +423,8 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
 /// and handle the delegate methods.
 extension BLEManager: CBCentralManagerDelegate {
 
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        didDiscover(central, peripheral: peripheral, advertisementData: advertisementData, rssi: RSSI)
+    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi rssiValue: NSNumber) {
+        didDiscover(central, peripheral: peripheral, advertisementData: advertisementData, rssi: rssiValue)
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {

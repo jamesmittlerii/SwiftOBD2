@@ -150,9 +150,9 @@ final class decodersTests: XCTestCase {
     }
     //
     func testEvapPressureAlt() {
-        let tests = [Data([0x00, 0x00]): MeasurementResult(value: -32767, unit: Unit.Pascal),
-                     Data([0x7F, 0xFF]): MeasurementResult(value: 0, unit: Unit.Pascal),
-                     Data([0xFF, 0xFF]): MeasurementResult(value: 32768, unit: Unit.Pascal)]
+        let tests = [Data([0x00, 0x00]): MeasurementResult(value: -32767, unit: Unit.pascal),
+                     Data([0x7F, 0xFF]): MeasurementResult(value: 0, unit: Unit.pascal),
+                     Data([0xFF, 0xFF]): MeasurementResult(value: 32768, unit: Unit.pascal)]
         for (data, expected) in tests {
             switch EvapPressureAltDecoder().decode(data: data, unit: .metric) {
             case let .success(result):
@@ -319,4 +319,3 @@ final class decodersTests: XCTestCase {
         }
     }
 }
-

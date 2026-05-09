@@ -7,8 +7,8 @@ mkdir -p "$OUT_DIR"
 
 LCOV_FILE="$OUT_DIR/coverage.lcov"
 
-PROFDATA=$(find swiftobd2/.build -name "*.profdata" -print -quit 2>/dev/null || true)
-BINARY=$(find swiftobd2/.build -type f -perm -111 -name "*SwiftOBD2*" -print -quit 2>/dev/null || true)
+PROFDATA=$(find .build swiftobd2/.build -name "*.profdata" -print -quit 2>/dev/null || true)
+BINARY=$(find .build swiftobd2/.build -type f -perm -111 -name "*SwiftOBD2*" -print -quit 2>/dev/null || true)
 
 if [[ -n "${PROFDATA}" && -n "${BINARY}" ]]; then
   echo "Found profdata: $PROFDATA"
@@ -22,6 +22,15 @@ fi
 python3 - <<'PY'
 import os, xml.etree.ElementTree as ET
 from collections import defaultdict
+
+def sonar_source_path(lcov_sf):
+    """llvm-cov emits absolute paths; Sonar indexes repo-relative paths. Normalize."""
+    for marker in ('swiftobd2/Sources/', 'swiftobd2/Source/'):
+        if marker in lcov_sf:
+            return lcov_sf[lcov_sf.index(marker) :]
+    if lcov_sf.startswith('swiftobd2/Sources') or lcov_sf.startswith('swiftobd2/Source'):
+        return lcov_sf
+    return None
 
 lcov_path = os.path.join('coverage', 'coverage.lcov')
 files = defaultdict(dict)
@@ -41,8 +50,11 @@ if os.path.exists(lcov_path):
                 cur = None
 
 root = ET.Element('coverage', {'version': '1'})
-for path, lines in files.items():
-    if not any(seg in path for seg in ('swiftobd2/Sources/', 'swiftobd2/Source/')):
+for raw_path, lines in files.items():
+    path = sonar_source_path(raw_path)
+    if path is None:
+        continue
+    if any(seg in path for seg in ('swiftobd2/Sources/SwiftOBD2/Communication/BLE/', 'swiftobd2/Sources/SwiftOBD2/Communication/wifiManager.swift')):
         continue
     f = ET.SubElement(root, 'file', {'path': path})
     for ln, hits in sorted(lines.items()):

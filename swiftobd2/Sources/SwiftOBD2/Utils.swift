@@ -118,14 +118,14 @@ public enum PROTOCOL: String, Codable, CaseIterable {
 
 // dictionary of all the protocols
 let protocols: [PROTOCOL: CANProtocol] = [
-    .protocol1: SAE_J1850_PWM(),
-    .protocol2: SAE_J1850_VPW(),
-    .protocol3: ISO_9141_2(),
-    .protocol4: ISO_14230_4_KWP_5Baud(),
-    .protocol5: ISO_14230_4_KWP_Fast(),
-    .protocol6: ISO_15765_4_11bit_500k(),
-    .protocol7: ISO_15765_4_29bit_500k(),
-    .protocol8: ISO_15765_4_11bit_250K(),
-    .protocol9: ISO_15765_4_29bit_250k(),
-    .protocolA: SAE_J1939(),
+    .protocol1: SaeJ1850Pwm(),
+    .protocol2: SaeJ1850Vpw(),
+    .protocol3: Iso91412(),
+    .protocol4: Iso142304Kwp5Baud(),
+    .protocol5: Iso142304KwpFast(),
+    .protocol6: Iso157654Can11Bit500k(),
+    .protocol7: Iso157654Can29Bit500k(),
+    .protocol8: Iso157654Can11Bit250k(),
+    .protocol9: Iso157654Can29Bit250k(),
+    .protocolA: SaeJ1939(),
 ]

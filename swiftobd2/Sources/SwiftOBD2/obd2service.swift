@@ -139,7 +139,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             /* DELETE THIS
              
              BMW was sending multiple messages for 0100
-            let myProtocol = ISO_15765_4_11bit_500k()
+            let myProtocol = Iso157654Can11Bit500k()
             let r100: [String] = ["7EB06410098188001","7E8064100BE3EA813","7ED06410098188001","7EF06410098188001"]
             let messages = try myProtocol.parse(r100)
              */
@@ -567,12 +567,23 @@ public func getVINInfo(vin: String) async throws -> VINResults {
 }
 
 public struct VINResults: Codable {
-    public let Results: [VINInfo]
+    public let results: [VINInfo]
+
+    enum CodingKeys: String, CodingKey {
+        case results = "Results"
+    }
 }
 
 public struct VINInfo: Codable, Hashable {
-    public let Make: String
-    public let Model: String
-    public let ModelYear: String
-    public let EngineCylinders: String
+    public let make: String
+    public let model: String
+    public let modelYear: String
+    public let engineCylinders: String
+
+    enum CodingKeys: String, CodingKey {
+        case make = "Make"
+        case model = "Model"
+        case modelYear = "ModelYear"
+        case engineCylinders = "EngineCylinders"
+    }
 }

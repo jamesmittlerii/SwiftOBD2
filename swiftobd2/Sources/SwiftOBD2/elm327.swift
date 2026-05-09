@@ -680,7 +680,7 @@ extension Data {
 }
 
 enum ECUHeader {
-    static let ENGINE = "7E0"
+    static let engine = "7E0"
 }
 
 // Possible setup errors
