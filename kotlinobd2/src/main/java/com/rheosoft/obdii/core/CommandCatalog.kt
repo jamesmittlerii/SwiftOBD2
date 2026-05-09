@@ -42,7 +42,7 @@ object CommandCatalog {
         val stream = CommandCatalog::class.java.getResourceAsStream("/command_aliases.json")
             ?: error(
                 "command_aliases.json not found on classpath. " +
-                    "Ensure SwiftOBD2 Sources/SwiftOBD2/Resources is included as a kotlinobd2 resource root."
+                    "Ensure ../swiftobd2/Sources/SwiftOBD2/Resources is included as a kotlinobd2 resource root."
             )
         val type = object : TypeToken<Map<String, Map<String, String>>>() {}.type
         return stream.use { s ->
@@ -54,7 +54,7 @@ object CommandCatalog {
         val stream = CommandCatalog::class.java.getResourceAsStream("/commands.enriched.json")
             ?: error(
                 "commands.enriched.json not found on classpath. " +
-                    "Ensure SwiftOBD2 Sources/SwiftOBD2/Resources is included as a kotlinobd2 resource root."
+                    "Ensure ../swiftobd2/Sources/SwiftOBD2/Resources is included as a kotlinobd2 resource root."
             )
         val type = object : TypeToken<List<CommandRow>>() {}.type
         return stream.use { s ->

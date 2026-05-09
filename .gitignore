@@ -27,3 +27,5 @@ kotlinobd2/bin/
 # IDE settings
 .vscode/
 .idea/
+local.properties
+**/local.properties

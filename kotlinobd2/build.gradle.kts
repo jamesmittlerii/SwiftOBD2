@@ -59,7 +59,7 @@ tasks.check {
 sourceSets {
     main {
         resources {
-            srcDir("../Sources/SwiftOBD2/Resources")
+            srcDir("../swiftobd2/Sources/SwiftOBD2/Resources")
         }
     }
 }
