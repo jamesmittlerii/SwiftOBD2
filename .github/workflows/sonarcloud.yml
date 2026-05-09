@@ -29,11 +29,13 @@ jobs:
 
       - name: Resolve dependencies
         run: swift package resolve
+        working-directory: swiftobd2
 
       - name: Run tests with coverage
         run: |
           set -euo pipefail
           swift test --enable-code-coverage --parallel
+          working-directory: swiftobd2
 
       - name: Convert coverage to Sonar Generic XML
         run: |
