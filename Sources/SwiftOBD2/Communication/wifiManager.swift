@@ -84,6 +84,12 @@ final class WifiManager: CommProtocol, @unchecked Sendable {
         }
         self.port = nwPort
     }
+
+    private func notifyDelegate(of state: ConnectionState) {
+        DispatchQueue.main.async {
+            self.obdDelegate?.connectionStateChanged(state: state)
+        }
+    }
     
     func connectAsync(timeout totalTimeout: TimeInterval,peripheral _: CBPeripheral? = nil) async throws {
         let tcpOptions = NWProtocolTCP.Options()
@@ -109,9 +115,7 @@ final class WifiManager: CommProtocol, @unchecked Sendable {
             let publishDisconnected: @Sendable () -> Void = { [self] in
                 if self.connectionState != .disconnected {
                     self.connectionState = .disconnected
-                    DispatchQueue.main.async {
-                        self.obdDelegate?.connectionStateChanged(state: .disconnected)
-                    }
+                    self.notifyDelegate(of: .disconnected)
                 }
             }
 
@@ -177,9 +181,7 @@ final class WifiManager: CommProtocol, @unchecked Sendable {
                         // Keep waiting; optionally reflect as “connecting”
                         if self.connectionState != .connecting {
                             self.connectionState = .connecting
-                            DispatchQueue.main.async {
-                                self.obdDelegate?.connectionStateChanged(state: .connecting)
-                            }
+                            self.notifyDelegate(of: .connecting)
                         }
                     }
                     
@@ -216,56 +218,8 @@ final class WifiManager: CommProtocol, @unchecked Sendable {
             throw CommunicationError.invalidData
         }
 
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-            
-            // Step 1: Send the command
-            tcpConnection.send(content: data, completion: .contentProcessed { error in
-                if let error = error {
-                    continuation.resume(throwing: CommunicationError.errorOccurred(error))
-                    return
-                }
-
-                var buffer = Data()
-                
-                func receiveLoop() {
-                    tcpConnection.receive(minimumIncompleteLength: 1, maximumLength: 512) { chunk, _, isComplete, error in
-                        if let error = error {
-                            continuation.resume(throwing: CommunicationError.errorOccurred(error))
-                            return
-                        }
-                        
-                        guard let chunk = chunk else {
-                            continuation.resume(throwing: CommunicationError.invalidData)
-                            return
-                        }
-                        
-                        buffer.append(chunk)
-                        
-                        // Try to decode into UTF-8
-                        let text = String(data: buffer, encoding: .utf8) ?? ""
-                        
-                        // ✅ ELM327 is done
-                        if text.contains(">") {
-                            //let cleaned = text.replacingOccurrences(of: ">", with: "")
-                            obdDebug("received: \(text)", category: .wifi)
-                            continuation.resume(returning: text)
-                            return
-                        }
-                        
-                        // ✅ Continue receiving until prompt arrives
-                        if !isComplete {
-                            receiveLoop()
-                        } else {
-                            // No prompt AND stream ended? -> Error
-                            continuation.resume(throwing: CommunicationError.invalidData)
-                        }
-                    }
-                }
-                
-                // Begin receive loop
-                receiveLoop()
-            })
-        }
+        try await send(data, over: tcpConnection)
+        return try await receiveUntilPrompt(over: tcpConnection)
     }
 
     private func processResponse(_ response: String) -> [String]? {
@@ -291,7 +245,9 @@ final class WifiManager: CommProtocol, @unchecked Sendable {
         tcp?.cancel()
     }
 
-    func scanForPeripherals() async throws {}
+    func scanForPeripherals() async throws {
+        // Wi-Fi adapters connect directly to a configured host and port, so there is no scan step to perform.
+    }
     
     func sendCommand(_ command: String, retries: Int) async throws -> [String] {
         guard let tcp else { throw ELM327Error.noConnection }

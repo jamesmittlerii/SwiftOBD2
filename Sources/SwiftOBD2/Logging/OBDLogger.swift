@@ -14,7 +14,7 @@ public class OBDLogger {
         case service = "Service"
         case bluetooth = "Bluetooth"
         case wifi = "WiFi"
-        case `protocol` = "Protocol"
+        case protocolCategory = "Protocol"
         case performance = "Performance"
         case error = "Error"
     }
@@ -144,15 +144,15 @@ public class OBDLogger {
     }
     
     /// Log protocol detection and negotiation
-    public func logProtocolEvent(_ event: String, protocol: String? = nil, details: String? = nil) {
+    public func logProtocolEvent(_ event: String, protocolName: String? = nil, details: String? = nil) {
         var message = event
-        if let `protocol` = `protocol` {
-            message += " | Protocol: \(`protocol`)"
+        if let protocolName {
+            message += " | Protocol: \(protocolName)"
         }
         if let details = details {
             message += " | Details: \(details)"
         }
-        info(message, category: .protocol)
+        info(message, category: .protocolCategory)
     }
 }
 

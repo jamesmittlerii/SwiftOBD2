@@ -314,7 +314,7 @@ class BLEManager: NSObject, CommProtocol, BLEPeripheralManagerDelegate {
         try await peripheralManager.waitForCharacteristicsSetup(timeout: timeout)
     }
 
-    func peripheralManager(_ manager: BLEPeripheralManager, didSetupCharacteristics peripheral: CBPeripheral) {
+    func peripheralManager(_: BLEPeripheralManager, didSetupCharacteristics _: CBPeripheral) {
         let oldState = connectionState
         connectionState = .connectedToAdapter
         OBDLogger.shared.logConnectionChange(from: oldState, to: connectionState)

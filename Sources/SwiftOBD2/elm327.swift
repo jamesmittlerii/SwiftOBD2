@@ -180,19 +180,19 @@ class ELM327 {
     private func detectProtocol(preferredProtocol: PROTOCOL? = nil) async throws
         -> PROTOCOL
     {
-        obdInfo("Starting protocol detection...", category: .protocol)
+        obdInfo("Starting protocol detection...", category: .protocolCategory)
 
         if let protocolToTest = preferredProtocol {
             obdInfo(
                 "Attempting preferred protocol: \(protocolToTest.description)",
-                category: .protocol
+                category: .protocolCategory
             )
             if await testProtocol(protocolToTest) {
                 return protocolToTest
             } else {
                 obdWarning(
                     "Preferred protocol \(protocolToTest.description) failed. Falling back to automatic detection.",
-                    category: .protocol
+                    category: .protocolCategory
                 )
             }
         } else {
@@ -205,7 +205,7 @@ class ELM327 {
 
         obdError(
             "Failed to detect a compatible OBD protocol.",
-            category: .protocol
+            category: .protocolCategory
         )
         throw ELM327Error.noProtocolFound
     }
@@ -243,7 +243,7 @@ class ELM327 {
         for protocolOption in PROTOCOL.allCases where protocolOption != .NONE {
             obdInfo(
                 "Testing protocol: \(protocolOption.description)",
-                category: .protocol
+                category: .protocolCategory
             )
             _ = try await okResponse(protocolOption.cmd)
             if await testProtocol(protocolOption) {
@@ -251,7 +251,7 @@ class ELM327 {
             }
         }
         /// If we reach this point, no protocol was found
-        obdError("No protocol found", category: .protocol)
+        obdError("No protocol found", category: .protocolCategory)
         throw ELM327Error.noProtocolFound
     }
 
@@ -271,14 +271,14 @@ class ELM327 {
         {
             obdInfo(
                 "Protocol \(obdProtocol.description) is valid.",
-                category: .protocol
+                category: .protocolCategory
             )
             r100 = response
             return true
         } else {
             obdWarning(
                 "Protocol \(obdProtocol.rawValue) did not return valid 0100 response.",
-                category: .protocol
+                category: .protocolCategory
             )
             return false
         }

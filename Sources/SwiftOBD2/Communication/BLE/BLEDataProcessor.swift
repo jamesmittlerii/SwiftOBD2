@@ -62,35 +62,34 @@ class BLEMessageProcessor {
 
 
     func waitForResponse(timeout: TimeInterval) async throws -> [String] {
-            try await withTimeout(seconds: timeout, timeoutError: BLEMessageProcessorError.responseTimeout) { [self] in
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[String], Error>) in
-
-                    // Check if there's already a pending command
-                    assert(messageCompletion == nil, "Concurrent command detected")
-
-
-                    messageCompletion = { response, error in
-                        if let response = response {
-                            continuation.resume(returning: response)
-                        } else if let error = error {
-                            continuation.resume(throwing: error)
-                        } else {
-                            continuation.resume(throwing: BLEMessageProcessorError.responseTimeout)
-                        }
-                    }
-
-                }
+        try await withTimeout(seconds: timeout, timeoutError: BLEMessageProcessorError.responseTimeout) { [self] in
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[String], Error>) in
+                assert(messageCompletion == nil, "Concurrent command detected")
+                messageCompletion = makeMessageCompletion(for: continuation)
             }
         }
+    }
+
+    private func makeMessageCompletion(for continuation: CheckedContinuation<[String], Error>) -> ([String]?, Error?) -> Void {
+        { response, error in
+            if let response {
+                continuation.resume(returning: response)
+            } else if let error {
+                continuation.resume(throwing: error)
+            } else {
+                continuation.resume(throwing: BLEMessageProcessorError.responseTimeout)
+            }
+        }
+    }
 
     func reset() {
-           buffer.removeAll()
-           let completion = messageCompletion
-           messageCompletion = nil
+        buffer.removeAll()
+        let completion = messageCompletion
+        messageCompletion = nil
 
-           // Call completion with error if it exists
-           completion?(nil, BLEManagerError.peripheralNotConnected)
-       }
+        // Call completion with error if it exists
+        completion?(nil, BLEManagerError.peripheralNotConnected)
+    }
 }
 
 // MARK: - Error Types

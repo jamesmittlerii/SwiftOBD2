@@ -17,6 +17,10 @@ protocol BLEConnectionProtocol {
 
 /// Focused component responsible for BLE connection management and service discovery
 class BLEConnection: NSObject, BLEConnectionProtocol {
+    private final class ConnectionResumeState {
+        var hasResumed = false
+    }
+
     // MARK: - Properties
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.swiftobd2.app", category: "BLEConnection")
@@ -94,30 +98,8 @@ class BLEConnection: NSObject, BLEConnectionProtocol {
             operation: {
                 // Main connection task
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                    var hasResumed = false
-
-                    self.connectionCompletion = { [weak self] connectedPeripheral, error in
-                        // Ensure we only resume once
-                        guard !hasResumed else {
-                            obdDebug("Connection completion called but continuation already resumed", category: .bluetooth)
-                            return
-                        }
-                        hasResumed = true
-
-                        if let connectedPeripheral = connectedPeripheral {
-                            obdInfo("Successfully connected and configured: \(connectedPeripheral.name ?? connectedPeripheral.identifier.uuidString)", category: .bluetooth)
-                            continuation.resume(returning: ())
-                        } else if let error = error {
-                            obdError("Connection failed: \(error.localizedDescription)", category: .bluetooth)
-                            self?.resetConnectionState()
-                            continuation.resume(throwing: error)
-                        } else {
-                            obdError("Connection failed with unknown error", category: .bluetooth)
-                            self?.resetConnectionState()
-                            continuation.resume(throwing: BLEConnectionError.connectionFailed)
-                        }
-                        self?.connectionCompletion = nil
-                    }
+                    let resumeState = ConnectionResumeState()
+                    self.connectionCompletion = self.makeConnectionCompletion(for: continuation, resumeState: resumeState)
 
                     // Start connection
                     peripheral.delegate = self
@@ -134,6 +116,33 @@ class BLEConnection: NSObject, BLEConnectionProtocol {
                 }
             }
         )
+    }
+
+    private func makeConnectionCompletion(
+        for continuation: CheckedContinuation<Void, Error>,
+        resumeState: ConnectionResumeState
+    ) -> (CBPeripheral?, Error?) -> Void {
+        { [weak self] connectedPeripheral, error in
+            guard !resumeState.hasResumed else {
+                obdDebug("Connection completion called but continuation already resumed", category: .bluetooth)
+                return
+            }
+            resumeState.hasResumed = true
+
+            if let connectedPeripheral {
+                obdInfo("Successfully connected and configured: \(connectedPeripheral.name ?? connectedPeripheral.identifier.uuidString)", category: .bluetooth)
+                continuation.resume(returning: ())
+            } else if let error {
+                obdError("Connection failed: \(error.localizedDescription)", category: .bluetooth)
+                self?.resetConnectionState()
+                continuation.resume(throwing: error)
+            } else {
+                obdError("Connection failed with unknown error", category: .bluetooth)
+                self?.resetConnectionState()
+                continuation.resume(throwing: BLEConnectionError.connectionFailed)
+            }
+            self?.connectionCompletion = nil
+        }
     }
 
     func disconnect() {

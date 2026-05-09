@@ -34,7 +34,7 @@ class BLEPeripheralScanner: ObservableObject {
 
     private var foundPeripheralCompletion: ((CBPeripheral?, Error?) -> Void)?
 
-    func addDiscoveredPeripheral(_ peripheral: CBPeripheral, advertisementData: [String: Any], rssi: NSNumber) {
+    func addDiscoveredPeripheral(_ peripheral: CBPeripheral, advertisementData _: [String: Any], rssi: NSNumber) {
         // Filter out peripherals with invalid RSSI
         guard rssi.intValue < 0 else { return }
 
@@ -62,28 +62,33 @@ class BLEPeripheralScanner: ObservableObject {
             seconds: timeout,
             timeoutError: BLEManagerError.timeout,
             onTimeout: { [weak self] in
-                // If there is a pending continuation, resume it with a timeout error
-                if let completion = self?.foundPeripheralCompletion {
-                    completion(nil, BLEManagerError.timeout)
-                    self?.foundPeripheralCompletion = nil
-                }
+                self?.completePeripheralDiscovery(peripheral: nil, error: BLEManagerError.timeout)
             },
             operation: {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CBPeripheral, Error>) in
-                    self.foundPeripheralCompletion = { peripheral, error in
-                        if let peripheral = peripheral {
-                            continuation.resume(returning: peripheral)
-                        } else if let error = error {
-                            continuation.resume(throwing: error)
-                        } else {
-                            continuation.resume(throwing: BLEScannerError.peripheralNotFound)
-                        }
-                        // Clear after resuming to avoid double-resume
-                        self.foundPeripheralCompletion = nil
-                    }
+                    self.foundPeripheralCompletion = self.makeFoundPeripheralCompletion(for: continuation)
                 }
             }
         )
+    }
+
+    private func completePeripheralDiscovery(peripheral: CBPeripheral?, error: Error?) {
+        foundPeripheralCompletion?(peripheral, error)
+        foundPeripheralCompletion = nil
+    }
+
+    private func makeFoundPeripheralCompletion(for continuation: CheckedContinuation<CBPeripheral, Error>) -> (CBPeripheral?, Error?) -> Void {
+        { [weak self] peripheral, error in
+            defer { self?.foundPeripheralCompletion = nil }
+
+            if let peripheral {
+                continuation.resume(returning: peripheral)
+            } else if let error {
+                continuation.resume(throwing: error)
+            } else {
+                continuation.resume(throwing: BLEScannerError.peripheralNotFound)
+            }
+        }
     }
 }
 // MARK: - CBPeripheralDelegate

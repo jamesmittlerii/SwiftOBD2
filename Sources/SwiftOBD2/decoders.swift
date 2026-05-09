@@ -558,7 +558,7 @@ struct SensorVoltageDecoder: Decoder {
 }
 
 struct O2SensorsDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         let bits = BitArray(data: bytes).binaryArray
         let bank1 = Array(bits[0..<4])
@@ -568,7 +568,7 @@ struct O2SensorsDecoder: Decoder {
 }
 
 struct O2SensorsAltDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         let bits = BitArray(data: bytes).binaryArray
         let bank1 = Array(bits[0..<2])
@@ -580,7 +580,7 @@ struct O2SensorsAltDecoder: Decoder {
 }
 
 struct OBDComplianceDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         guard bytes.count > 1 else { return .failure(.invalidData) }
         let i = bytes[1]
@@ -594,7 +594,7 @@ struct OBDComplianceDecoder: Decoder {
 }
 
 struct TimingAdvanceDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         let value = Double(bytes.first ?? 0) / 2.0 - 64.0
         return .success(.measurementResult(MeasurementResult(value: value, unit: UnitAngle.degrees)))

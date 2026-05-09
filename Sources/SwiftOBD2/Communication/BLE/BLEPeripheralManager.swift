@@ -8,8 +8,8 @@ protocol BLEPeripheralManagerDelegate: AnyObject {
 }
 
 class BLEPeripheralManager: NSObject, ObservableObject {
-    func didWriteValue(_ peripheral: CBPeripheral, descriptor: CBDescriptor, error: (any Error)?) {
-
+    func didWriteValue(_: CBPeripheral, descriptor _: CBDescriptor, error _: (any Error)?) {
+        // Descriptor writes are not used by this package; characteristic write results are handled elsewhere.
     }
 
     @Published var connectedPeripheral: CBPeripheral?
@@ -37,20 +37,24 @@ class BLEPeripheralManager: NSObject, ObservableObject {
     func waitForCharacteristicsSetup(timeout: TimeInterval) async throws {
         try await withTimeout(seconds: timeout) { [self] in
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                self.connectionCompletion = { peripheral, error in
-                    if peripheral != nil {
-                        continuation.resume()
-                    } else if let error = error {
-                        continuation.resume(throwing: error)
-                    } else {
-                        continuation.resume(throwing: BLEManagerError.unknownError)
-                    }
-                }
+                self.connectionCompletion = makeConnectionCompletion(for: continuation)
             }
         }
     }
 
-    func didDiscoverServices(_ peripheral: CBPeripheral, error: Error?) {
+    private func makeConnectionCompletion(for continuation: CheckedContinuation<Void, Error>) -> (CBPeripheral?, Error?) -> Void {
+        { peripheral, error in
+            if peripheral != nil {
+                continuation.resume()
+            } else if let error {
+                continuation.resume(throwing: error)
+            } else {
+                continuation.resume(throwing: BLEManagerError.unknownError)
+            }
+        }
+    }
+
+    func didDiscoverServices(_ peripheral: CBPeripheral, error _: Error?) {
         for service in peripheral.services ?? [] {
             obdInfo("Discovered service: \(service.uuid.uuidString)", category: .bluetooth)
             characteristicHandler.discoverCharacteristics(for: service, on: peripheral)

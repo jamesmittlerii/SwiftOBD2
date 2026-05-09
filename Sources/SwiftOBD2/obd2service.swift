@@ -175,7 +175,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
     /// Switches the active connection type (between Bluetooth and Wi-Fi).
     ///
     /// - Parameter connectionType: The new desired connection type.
-    private func switchConnectionType(_ connectionType: ConnectionType) {
+    private func switchConnectionType(_: ConnectionType) {
         stopConnection()
         initializeELM327()
         bindPeripheralIfNeeded()
@@ -188,7 +188,7 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             bleManagerRef = bleManager
             elm327 = ELM327(comm: bleManager)
         case .wifi:
-            let resolvedHost = wifiHost ?? "192.168.4.207"
+            let resolvedHost = wifiHost ?? "192.168.0.10" // 192.168.4.207"
             let resolvedPort = wifiPort ?? 35000
             elm327 = ELM327(comm: WifiManager(host: resolvedHost, port: resolvedPort))
             bleManagerRef = nil
@@ -543,4 +543,3 @@ public struct VINInfo: Codable, Hashable {
     public let ModelYear: String
     public let EngineCylinders: String
 }
-

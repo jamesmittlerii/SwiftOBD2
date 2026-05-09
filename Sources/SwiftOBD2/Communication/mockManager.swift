@@ -41,7 +41,7 @@ class MOCKComm: CommProtocol {
     var ecuSettings: MockECUSettings = .init()
     private var sessionState = MockSessionState()
 
-    func sendCommand(_ command: String, retries: Int = 3) async throws -> [String] {
+    func sendCommand(_ command: String, retries _: Int = 3) async throws -> [String] {
         //obdInfo("Sending command: \(command)")
         var header = ""
 
@@ -273,13 +273,13 @@ class MOCKComm: CommProtocol {
         obdDelegate?.connectionStateChanged(state: .disconnected)
     }
 
-    func connectAsync(timeout: TimeInterval, peripheral: CBPeripheral? = nil) async throws {
+    func connectAsync(timeout _: TimeInterval, peripheral _: CBPeripheral? = nil) async throws {
         connectionState = .connectedToAdapter
         obdDelegate?.connectionStateChanged(state: .connectedToAdapter)
     }
 
     func scanForPeripherals() async throws {
-
+        // Mock communication exposes no discovery phase; tests connect to the in-memory adapter immediately.
     }
 }
 

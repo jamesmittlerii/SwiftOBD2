@@ -199,7 +199,9 @@ class ISO_14230_4_KWP_5Baud: CANProtocol {
 public class ISO_14230_4_KWP_Fast: CANProtocol {
     let elmID = "5"
     let name = "ISO 14230-4 KWP (fast init)"
-    public init() {}
+    public init() {
+        // Stateless protocol adapter; initialization exists only to expose the type publicly.
+    }
 
     public func parse(_ lines: [String]) throws -> [MessageProtocol] {
         try parseLegacy(lines)
