@@ -567,12 +567,23 @@ public func getVINInfo(vin: String) async throws -> VINResults {
 }
 
 public struct VINResults: Codable {
-    public let Results: [VINInfo]
+    public let results: [VINInfo]
+
+    enum CodingKeys: String, CodingKey {
+        case results = "Results"
+    }
 }
 
 public struct VINInfo: Codable, Hashable {
-    public let Make: String
-    public let Model: String
-    public let ModelYear: String
-    public let EngineCylinders: String
+    public let make: String
+    public let model: String
+    public let modelYear: String
+    public let engineCylinders: String
+
+    enum CodingKeys: String, CodingKey {
+        case make = "Make"
+        case model = "Model"
+        case modelYear = "ModelYear"
+        case engineCylinders = "EngineCylinders"
+    }
 }

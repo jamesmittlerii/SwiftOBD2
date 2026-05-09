@@ -82,16 +82,16 @@ class MOCKComm: CommProtocol {
 
                 var ff = chunks[0]
 
-                var Totallength = 0
+                var totalLength = 0
 
                 let ffLength = ff.replacingOccurrences(of: " ", with: "").count / 2
 
-                Totallength += ffLength
+                totalLength += ffLength
 
                 var cf = Array(chunks.dropFirst())
-                Totallength += cf.joined().replacingOccurrences(of: " ", with: "").count
+                totalLength += cf.joined().replacingOccurrences(of: " ", with: "").count
 
-                var lengthHex = String(format: "%02X", Totallength - 1)
+                var lengthHex = String(format: "%02X", totalLength - 1)
 
                 if lengthHex.count % 2 != 0 {
                     lengthHex = "0" + lengthHex
@@ -173,7 +173,7 @@ class MOCKComm: CommProtocol {
                 default:
                     if action.hasPrefix("ST") {
                         let hexByte = String(action.dropFirst(2))   // get the "xx"
-                        if let _ = UInt8(hexByte, radix: 16) {
+                        if UInt8(hexByte, radix: 16) != nil {
                             //ecuSettings.timeout = hexByte
                             return ["OK"]
                         } else {
@@ -221,9 +221,9 @@ class MOCKComm: CommProtocol {
                 let d3 = UInt8(String(digits.dropFirst(2)), radix: 16)!
 
                 // Byte A = system + d1 + d2
-                let A = (systemNibble << 6) | (d1 << 4) | d2
-                let B = d3
-                return [A, B]
+                let byteA = (systemNibble << 6) | (d1 << 4) | d2
+                let byteB = d3
+                return [byteA, byteB]
             }
 
             // Build full data payload
@@ -402,61 +402,61 @@ private extension MOCKComm {
                 let stages = Int(t / 12.0) // 10 stages (0...10)
 
                 // Byte0: MIL on + 7 DTCs
-                let A0: UInt8 = 0x80 | 0x07 // 0x87
+                let milAndCountByte: UInt8 = 0x80 | 0x07 // 0x87
 
                 // Base monitors in A (bit set = NOT ready). Start all not ready.
                 // bit6 = Comprehensive, bit5 = Fuel System, bit4 = Misfire
-                var A: UInt8 = 0
-                A |= 0x40 // Comprehensive not ready
-                A |= 0x20 // Fuel System not ready
-                A |= 0x10 // Misfire not ready
+                var baseMonitorByte: UInt8 = 0
+                baseMonitorByte |= 0x40 // Comprehensive not ready
+                baseMonitorByte |= 0x20 // Fuel System not ready
+                baseMonitorByte |= 0x10 // Misfire not ready
                 // Ensure diesel bit (0x08) is never set for gasoline
 
                 // Extended monitors support (B): gasoline set
                 // bit0 Catalyst, bit1 Heated Catalyst, bit2 Evap, bit3 Secondary Air,
                 // bit5 O2 Sensor, bit6 O2 Heater, bit7 EGR/VVT
-                var B: UInt8 = 0
-                B |= 0x01 // Catalyst
-                B |= 0x02 // Heated Catalyst
-                B |= 0x04 // Evaporative System
-                B |= 0x08 // Secondary Air
-                B |= 0x20 // O2 Sensor
-                B |= 0x40 // O2 Heater
-                B |= 0x80 // EGR/VVT
+                var supportedMonitorByte: UInt8 = 0
+                supportedMonitorByte |= 0x01 // Catalyst
+                supportedMonitorByte |= 0x02 // Heated Catalyst
+                supportedMonitorByte |= 0x04 // Evaporative System
+                supportedMonitorByte |= 0x08 // Secondary Air
+                supportedMonitorByte |= 0x20 // O2 Sensor
+                supportedMonitorByte |= 0x40 // O2 Heater
+                supportedMonitorByte |= 0x80 // EGR/VVT
 
                 // Readiness C (1 = NOT ready, 0 = ready). Start all not ready for supported monitors.
-                var C: UInt8 = 0
-                C |= 0x01 // Catalyst not ready
-                C |= 0x02 // Heated Catalyst not ready
-                C |= 0x04 // Evap not ready
-                C |= 0x08 // Secondary Air not ready
-                C |= 0x20 // O2 Sensor not ready
-                C |= 0x40 // O2 Heater not ready
-                C |= 0x80 // EGR/VVT not ready
+                var readinessByte: UInt8 = 0
+                readinessByte |= 0x01 // Catalyst not ready
+                readinessByte |= 0x02 // Heated Catalyst not ready
+                readinessByte |= 0x04 // Evap not ready
+                readinessByte |= 0x08 // Secondary Air not ready
+                readinessByte |= 0x20 // O2 Sensor not ready
+                readinessByte |= 0x40 // O2 Heater not ready
+                readinessByte |= 0x80 // EGR/VVT not ready
 
                 // Define readiness order across 10 stages
                 // 1) Comprehensive (A bit6), 2) Fuel (A bit5), 3) Misfire (A bit4),
                 // 4) O2 Heater (C bit6), 5) O2 Sensor (C bit5), 6) Catalyst (C bit0),
                 // 7) Evap (C bit2), 8) EGR (C bit7), 9) Secondary Air (C bit3), 10) Heated Catalyst (C bit1)
-                if stages >= 1 { A &= ~0x40 } // Comprehensive ready
-                if stages >= 2 { A &= ~0x20 } // Fuel ready
-                if stages >= 3 { A &= ~0x10 } // Misfire ready
-                if stages >= 4 { C &= ~0x40 } // O2 Heater ready
-                if stages >= 5 { C &= ~0x20 } // O2 Sensor ready
-                if stages >= 6 { C &= ~0x01 } // Catalyst ready
-                if stages >= 7 { C &= ~0x04 } // Evap ready
-                if stages >= 8 { C &= ~0x80 } // EGR/VVT ready
-                if stages >= 9 { C &= ~0x08 } // Secondary Air ready
-                if stages >= 10 { C &= ~0x02 } // Heated Catalyst ready
+                if stages >= 1 { baseMonitorByte &= ~0x40 } // Comprehensive ready
+                if stages >= 2 { baseMonitorByte &= ~0x20 } // Fuel ready
+                if stages >= 3 { baseMonitorByte &= ~0x10 } // Misfire ready
+                if stages >= 4 { readinessByte &= ~0x40 } // O2 Heater ready
+                if stages >= 5 { readinessByte &= ~0x20 } // O2 Sensor ready
+                if stages >= 6 { readinessByte &= ~0x01 } // Catalyst ready
+                if stages >= 7 { readinessByte &= ~0x04 } // Evap ready
+                if stages >= 8 { readinessByte &= ~0x80 } // EGR/VVT ready
+                if stages >= 9 { readinessByte &= ~0x08 } // Secondary Air ready
+                if stages >= 10 { readinessByte &= ~0x02 } // Heated Catalyst ready
 
-                let payload = String(format: "01 %02X %02X %02X %02X", A0, A, B, C)
+                let payload = String(format: "01 %02X %02X %02X %02X", milAndCountByte, baseMonitorByte, supportedMonitorByte, readinessByte)
                 return payload
             case .freezeDTC:
                 // Return a single stored code (e.g., P0301 => 03 01)
                 return "02 03 01"
             case .fuelStatus:
                 // Compute fuel status based on coolant temp and throttle demand
-                // Status coding per your FuelStatusDecoder/FUEL_STATUS:
+                // Status coding per your FuelStatusDecoder/fuelStatus:
                 // 1 = Open Loop (cold engine)
                 // 2 = Closed Loop (normal operation)
                 // 3 = Open Loop (load/fuel cut)
@@ -518,9 +518,8 @@ private extension MOCKComm {
                 // Encode as two bytes for PID 0103. Your FuelStatusDecoder reads the bitfield,
                 // but commonly returning the code in the low nibble is acceptable for the mock.
                 // We'll place it in byte A and zero byte B.
-                let A = statusCode
-                let _: UInt8 = 0x00
-                return "03 " + String(format: "%02X %02X", A, A)
+                let statusByte = statusCode
+                return "03 " + String(format: "%02X %02X", statusByte, statusByte)
             case .engineLoad:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
@@ -547,26 +546,26 @@ private extension MOCKComm {
             case .shortFuelTrim1:
                 // Oscillate around 0% +/- 5%
                 let trim = 128 + Int((sin(sessionElapsed() * 1.7) * 0.05 * 255.0).rounded())
-                let A = UInt8(clamping: trim)
-                return "06 " + String(format: "%02X", A)
+                let trimByte = UInt8(clamping: trim)
+                return "06 " + String(format: "%02X", trimByte)
             case .longFuelTrim1:
                 // Slow drift around +2%
                 let trim = 128 + Int((sin(sessionElapsed() * 0.2) * 0.02 * 255.0).rounded())
-                let A = UInt8(clamping: trim)
-                return "07 " + String(format: "%02X", A)
+                let trimByte = UInt8(clamping: trim)
+                return "07 " + String(format: "%02X", trimByte)
             case .shortFuelTrim2:
                 let trim = 128 + Int((cos(sessionElapsed() * 1.5) * 0.05 * 255.0).rounded())
-                let A = UInt8(clamping: trim)
-                return "08 " + String(format: "%02X", A)
+                let trimByte = UInt8(clamping: trim)
+                return "08 " + String(format: "%02X", trimByte)
             case .longFuelTrim2:
                 let trim = 128 + Int((cos(sessionElapsed() * 0.25) * 0.02 * 255.0).rounded())
-                let A = UInt8(clamping: trim)
-                return "09 " + String(format: "%02X", A)
+                let trimByte = UInt8(clamping: trim)
+                return "09 " + String(format: "%02X", trimByte)
             case .fuelPressure:
                 let centerKPa = 400.0 + smoothNoise(seed: 6, scale: 25.0)
                 let kPa = max(200.0, min(600.0, centerKPa))
-                let A = UInt8(max(0, min(255, Int((kPa / 3.0).rounded()))))
-                return "0A " + String(format: "%02X", A)
+                let pressureByte = UInt8(max(0, min(255, Int((kPa / 3.0).rounded()))))
+                return "0A " + String(format: "%02X", pressureByte)
             case .intakePressure:
                 let speedValue = currentMockSpeed()
                 let rpm = currentMockRPM(fromSpeed: speedValue)
@@ -579,17 +578,17 @@ private extension MOCKComm {
                 load = max(0.0, min(1.0, load))
                 var kPa = 25.0 + load * 70.0 + smoothNoise(seed: 8, scale: 2.0)
                 kPa = max(20.0, min(100.0, kPa))
-                let A = UInt8(max(0, min(255, Int(kPa.rounded()))))
+                let pressureByte = UInt8(max(0, min(255, Int(kPa.rounded()))))
                 //return "0B C6"
-                return "0B " + String(format: "%02X", A)
+                return "0B " + String(format: "%02X", pressureByte)
             case .rpm:
                 let speedValue = currentMockSpeed()
                 let rpmDouble = currentMockRPM(fromSpeed: speedValue)
                 let rpmClamped = min(8000.0, max(800.0, rpmDouble))
                 let raw = Int(rpmClamped.rounded()) * 4
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                return "0C " + String(format: "%02X %02X", A, B)
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = raw & 0xFF
+                return "0C " + String(format: "%02X %02X", highByte, lowByte)
             case .speed:
                 let speedValue = currentMockSpeed()
                 let clamped = max(0.0, min(255.0, speedValue))
@@ -614,9 +613,9 @@ private extension MOCKComm {
 
                 // CORRECT OBD-II ENCODING: A = (advance + 64) * 2
                 let raw = max(0, min(255, Int((advance + 64.0) * 2.0)))
-                let A = UInt8(raw)
+                let timingByte = UInt8(raw)
 
-                return "0E " + String(format: "%02X", A)
+                return "0E " + String(format: "%02X", timingByte)
 
 
 
@@ -638,9 +637,9 @@ private extension MOCKComm {
                 let withLoad = base * (0.8 + 0.4 * rpmN)
                 let mafGs = max(2.0, min(200.0, withLoad + smoothNoise(seed: 2, scale: 3.0)))
                 let raw = Int((mafGs * 100.0).rounded())
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                return "10 " + String(format: "%02X %02X", A, B)
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = raw & 0xFF
+                return "10 " + String(format: "%02X %02X", highByte, lowByte)
             case .throttlePos:
                 // See previous detailed logic; simplified final demand retained
                 let now = Date()
@@ -685,8 +684,8 @@ private extension MOCKComm {
                 demand += smoothNoise(seed: 5.5, scale: 0.015)
                 demand = max(0.0, min(1.0, demand))
 
-                let A = UInt8(clamping: Int((demand * 255.0).rounded()))
-                return "11 " + String(format: "%02X", A)
+                let throttleByte = UInt8(clamping: Int((demand * 255.0).rounded()))
+                return "11 " + String(format: "%02X", throttleByte)
             case .airStatus:
                 // Secondary air status bitfield (typical: upstream of cat, pulsed)
                 return "12 04"
@@ -696,28 +695,28 @@ private extension MOCKComm {
             case .O2Bank1Sensor1:
                 // Narrowband voltage A and STFT B (%)
                 let v = max(0.1, min(0.9, 0.5 + smoothNoise(seed: 14, scale: 0.3)))
-                let A = UInt8(clamping: Int((v / 1.275) * 255.0))
-                let B = UInt8(128 + Int((smoothNoise(seed: 15, scale: 0.05) * 255.0)))
-                return "14 " + String(format: "%02X %02X", A, B)
+                let voltageByte = UInt8(clamping: Int((v / 1.275) * 255.0))
+                let trimByte = UInt8(128 + Int((smoothNoise(seed: 15, scale: 0.05) * 255.0)))
+                return "14 " + String(format: "%02X %02X", voltageByte, trimByte)
             case .O2Bank1Sensor2:
                 let v = max(0.1, min(0.9, 0.55 + smoothNoise(seed: 16, scale: 0.25)))
-                let A = UInt8(clamping: Int((v / 1.275) * 255.0))
-                let B = UInt8(128 + Int((smoothNoise(seed: 17, scale: 0.04) * 255.0)))
-                return "15 " + String(format: "%02X %02X", A, B)
+                let voltageByte = UInt8(clamping: Int((v / 1.275) * 255.0))
+                let trimByte = UInt8(128 + Int((smoothNoise(seed: 17, scale: 0.04) * 255.0)))
+                return "15 " + String(format: "%02X %02X", voltageByte, trimByte)
             case .O2Bank1Sensor3:
                 return "16 80 80"
             case .O2Bank1Sensor4:
                 return "17 80 80"
             case .O2Bank2Sensor1:
                 let v = max(0.1, min(0.9, 0.48 + smoothNoise(seed: 18, scale: 0.28)))
-                let A = UInt8(clamping: Int((v / 1.275) * 255.0))
-                let B = UInt8(128 + Int((smoothNoise(seed: 19, scale: 0.05) * 255.0)))
-                return "18 " + String(format: "%02X %02X", A, B)
+                let voltageByte = UInt8(clamping: Int((v / 1.275) * 255.0))
+                let trimByte = UInt8(128 + Int((smoothNoise(seed: 19, scale: 0.05) * 255.0)))
+                return "18 " + String(format: "%02X %02X", voltageByte, trimByte)
             case .O2Bank2Sensor2:
                 let v = max(0.1, min(0.9, 0.52 + smoothNoise(seed: 20, scale: 0.22)))
-                let A = UInt8(clamping: Int((v / 1.275) * 255.0))
-                let B = UInt8(128 + Int((smoothNoise(seed: 21, scale: 0.04) * 255.0)))
-                return "19 " + String(format: "%02X %02X", A, B)
+                let voltageByte = UInt8(clamping: Int((v / 1.275) * 255.0))
+                let trimByte = UInt8(128 + Int((smoothNoise(seed: 21, scale: 0.04) * 255.0)))
+                return "19 " + String(format: "%02X %02X", voltageByte, trimByte)
             case .O2Bank2Sensor3:
                 return "1A 80 80"
             case .O2Bank2Sensor4:
@@ -735,18 +734,18 @@ private extension MOCKComm {
                 _ = sessionElapsed()
                 let seconds = Int(sessionState.accumulatedSeconds.rounded())
                 let raw = max(0, min(65535, seconds))
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                return "1F " + String(format: "%02X %02X", A, B)
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = raw & 0xFF
+                return "1F " + String(format: "%02X %02X", highByte, lowByte)
             case .pidsB:
                 return "20 FF FF FF FF 00"
             case .distanceWMIL:
                 _ = sessionElapsed()
                 let km = sessionState.accumulatedMeters / 1000.0
                 let raw = max(0, min(65535, Int(km.rounded())))
-                let A = (raw >> 8) & 0xFF
-                let B = 0xFF & raw
-                return "21 " + String(format: "%02X %02X", A, B)
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = 0xFF & raw
+                return "21 " + String(format: "%02X %02X", highByte, lowByte)
             case .fuelRailPressureVac:
                 // Simulate vacuum-referenced rail: rises with load
                 let speed = currentMockSpeed()
@@ -756,9 +755,9 @@ private extension MOCKComm {
                 // Idle ≈300 kPa → WOT ≈400 kPa
                 let kPa = 300.0 + (load * 100.0) + smoothNoise(seed: 22, scale: 10.0)
                 let raw = Int((kPa / 10.0).rounded())
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                return "22 " + String(format: "%02X %02X", A, B)
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = raw & 0xFF
+                return "22 " + String(format: "%02X %02X", highByte, lowByte)
 
             case .fuelRailPressureDirect:
                 
@@ -775,19 +774,19 @@ private extension MOCKComm {
                 // We'll return ~2.5V nominal with slight noise
                 let baseMv = 2500.0 + smoothNoise(seed: 23, scale: 200.0) * 1000.0
                 let raw = max(0, min(8192, Int(baseMv / 1.0)))
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = raw & 0xFF
                 return String(format: "%02X %02X %02X %02X %02X",
                               // PID
                               pidByte(for: command),
-                              A, B, 0x80, 0x00)
+                              highByte, lowByte, 0x80, 0x00)
             case .commandedEGR:
                 let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.2 + 0.2 * sin(sessionElapsed() * 0.3))) * 255.0).rounded()))
                 return "2C " + String(format: "%02X 00 00", pct)
             case .EGRError:
                 let centered = 128 + Int((smoothNoise(seed: 24, scale: 0.05) * 255.0))
-                let A = UInt8(clamping: centered)
-                return "2D " + String(format: "%02X 00 00", A)
+                let errorByte = UInt8(clamping: centered)
+                return "2D " + String(format: "%02X 00 00", errorByte)
             case .evaporativePurge:
                 let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.1 + 0.3 * sin(sessionElapsed() * 0.2))) * 255.0).rounded()))
                 return "2E " + String(format: "%02X 00 00", pct)
@@ -808,21 +807,21 @@ private extension MOCKComm {
                 _ = sessionElapsed()
                 let km = sessionState.accumulatedMeters / 1000.0
                 let raw = max(0, min(65535, Int(km.rounded())))
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                return "31 " + String(format: "%02X %02X", A, B)
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = raw & 0xFF
+                return "31 " + String(format: "%02X %02X", highByte, lowByte)
             case .evapVaporPressure:
                 // Typical signed pressure in Pa; here as 16-bit signed per your decoder
                 let pa = Int(100 + smoothNoise(seed: 25, scale: 50.0) * 100.0)
                 let raw = UInt16(bitPattern: Int16(clamping: pa))
-                let A = Int((raw >> 8) & 0xFF)
-                let B = Int(raw & 0xFF)
-                return "32 " + String(format: "%02X %02X", A, B)
+                let highByte = Int((raw >> 8) & 0xFF)
+                let lowByte = Int(raw & 0xFF)
+                return "32 " + String(format: "%02X %02X", highByte, lowByte)
             case .barometricPressure:
                 var kPa = 101.0 + smoothNoise(seed: 9, scale: 0.6)
                 kPa = max(95.0, min(105.0, kPa))
-                let A = UInt8(max(0, min(255, Int(kPa.rounded()))))
-                return "33 " + String(format: "%02X", A)
+                let pressureByte = UInt8(max(0, min(255, Int(kPa.rounded()))))
+                return "33 " + String(format: "%02X", pressureByte)
             case .O2Sensor1WRCurrent,
                  .O2Sensor2WRCurrent,
                  .O2Sensor3WRCurrent,
@@ -847,11 +846,11 @@ private extension MOCKComm {
                 // Use an exhaust temperature model 300–800C
                 let tC = 300.0 + 250.0 * (0.5 + 0.5 * sin(sessionElapsed() * 0.1)) + smoothNoise(seed: 27, scale: 15.0)
                 let raw = Int(((tC + 40.0) * 10.0).rounded())
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = raw & 0xFF
                 return String(format: "%02X %02X",
                               pidByte(for: command),
-                              A, B)
+                              highByte, lowByte)
             case .pidsC:
                 return "40 FF FF FF FE 00"
             case .statusDriveCycle:
@@ -859,43 +858,43 @@ private extension MOCKComm {
                 let t = min(max(sessionElapsed(), 0.0), 120.0)
                 let stages = Int(t / 12.0) // 10 stages
 
-                let A0: UInt8 = 0x80 | 0x07 // MIL on + 7 DTCs
+                let milAndCountByte: UInt8 = 0x80 | 0x07 // MIL on + 7 DTCs
 
-                var A: UInt8 = 0
-                A |= 0x40
-                A |= 0x20
-                A |= 0x10
+                var baseMonitorByte: UInt8 = 0
+                baseMonitorByte |= 0x40
+                baseMonitorByte |= 0x20
+                baseMonitorByte |= 0x10
 
-                var B: UInt8 = 0
-                B |= 0x01
-                B |= 0x02
-                B |= 0x04
-                B |= 0x08
-                B |= 0x20
-                B |= 0x40
-                B |= 0x80
+                var supportedMonitorByte: UInt8 = 0
+                supportedMonitorByte |= 0x01
+                supportedMonitorByte |= 0x02
+                supportedMonitorByte |= 0x04
+                supportedMonitorByte |= 0x08
+                supportedMonitorByte |= 0x20
+                supportedMonitorByte |= 0x40
+                supportedMonitorByte |= 0x80
 
-                var C: UInt8 = 0
-                C |= 0x01
-                C |= 0x02
-                C |= 0x04
-                C |= 0x08
-                C |= 0x20
-                C |= 0x40
-                C |= 0x80
+                var readinessByte: UInt8 = 0
+                readinessByte |= 0x01
+                readinessByte |= 0x02
+                readinessByte |= 0x04
+                readinessByte |= 0x08
+                readinessByte |= 0x20
+                readinessByte |= 0x40
+                readinessByte |= 0x80
 
-                if stages >= 1 { A &= ~0x40 }
-                if stages >= 2 { A &= ~0x20 }
-                if stages >= 3 { A &= ~0x10 }
-                if stages >= 4 { C &= ~0x40 }
-                if stages >= 5 { C &= ~0x20 }
-                if stages >= 6 { C &= ~0x01 }
-                if stages >= 7 { C &= ~0x04 }
-                if stages >= 8 { C &= ~0x80 }
-                if stages >= 9 { C &= ~0x08 }
-                if stages >= 10 { C &= ~0x02 }
+                if stages >= 1 { baseMonitorByte &= ~0x40 }
+                if stages >= 2 { baseMonitorByte &= ~0x20 }
+                if stages >= 3 { baseMonitorByte &= ~0x10 }
+                if stages >= 4 { readinessByte &= ~0x40 }
+                if stages >= 5 { readinessByte &= ~0x20 }
+                if stages >= 6 { readinessByte &= ~0x01 }
+                if stages >= 7 { readinessByte &= ~0x04 }
+                if stages >= 8 { readinessByte &= ~0x80 }
+                if stages >= 9 { readinessByte &= ~0x08 }
+                if stages >= 10 { readinessByte &= ~0x02 }
 
-                let payload = String(format: "41 %02X %02X %02X %02X", A0, A, B, C)
+                let payload = String(format: "41 %02X %02X %02X %02X", milAndCountByte, baseMonitorByte, supportedMonitorByte, readinessByte)
                 return payload
             case .controlModuleVoltage:
                 return "42 35 04"
@@ -908,16 +907,16 @@ private extension MOCKComm {
                 load += smoothNoise(seed: 28, scale: 0.05)
                 load = max(0.0, min(1.0, load))
                 let raw = UInt16(clamping: Int((load * 65535.0).rounded()))
-                let A = Int((raw >> 8) & 0xFF)
-                let B = Int(raw & 0xFF)
-                return "43 " + String(format: "%02X %02X", A, B)
+                let highByte = Int((raw >> 8) & 0xFF)
+                let lowByte = Int(raw & 0xFF)
+                return "43 " + String(format: "%02X %02X", highByte, lowByte)
             case .commandedEquivRatio:
                 // Lambda around 1.00 +/- 0.03
                 let lambda = 1.0 + smoothNoise(seed: 29, scale: 0.03)
                 let raw = UInt16(clamping: Int((lambda * 32768.0).rounded()))
-                let A = Int((raw >> 8) & 0xFF)
-                let B = Int(raw & 0xFF)
-                return "44 " + String(format: "%02X %02X", A, B)
+                let highByte = Int((raw >> 8) & 0xFF)
+                let lowByte = Int(raw & 0xFF)
+                return "44 " + String(format: "%02X %02X", highByte, lowByte)
              case .ambientAirTemp:
                 return "46 32"
             case .relativeThrottlePos,
@@ -942,9 +941,9 @@ private extension MOCKComm {
             case .timeSinceDTCCleared:
                 let seconds = Int(sessionElapsed().rounded())
                 let raw = UInt16(clamping: seconds)
-                let A = Int((raw >> 8) & 0xFF)
-                let B = Int(raw & 0xFF)
-                return "4E " + String(format: "%02X %02X", A, B)
+                let highByte = Int((raw >> 8) & 0xFF)
+                let lowByte = Int(raw & 0xFF)
+                return "4E " + String(format: "%02X %02X", highByte, lowByte)
             case .maxValues:
                 // Provide plausible static maxima bytes
                 return "4F FF FF FF FF FF"
@@ -952,47 +951,47 @@ private extension MOCKComm {
                 // Max MAF in g/s encoded per decoder (A*256+B)/50
                 let maxMafGs = 300.0
                 let raw = UInt16(clamping: Int((maxMafGs * 50.0).rounded()))
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                return "50 " + String(format: "%02X %02X", A, B)
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = raw & 0xFF
+                return "50 " + String(format: "%02X %02X", highByte, lowByte)
             case .fuelType:
                 return "51 01"
             case .ethanoPercent:
-                let A = UInt8(26)
-                return "52 " + String(format: "%02X", A)
+                let ethanolByte = UInt8(26)
+                return "52 " + String(format: "%02X", ethanolByte)
             case .evapVaporPressureAbs:
                 // Absolute pressure in Pa (signed), simulate near 300 Pa
                 let pa = Int(300 + smoothNoise(seed: 31, scale: 50.0) * 100.0)
                 let raw = UInt16(bitPattern: Int16(clamping: pa))
-                let A = Int((raw >> 8) & 0xFF)
-                let B = Int(raw & 0xFF)
-                return "53 " + String(format: "%02X %02X", A, B)
+                let highByte = Int((raw >> 8) & 0xFF)
+                let lowByte = Int(raw & 0xFF)
+                return "53 " + String(format: "%02X %02X", highByte, lowByte)
             case .evapVaporPressureAlt:
                 // Alternate encoding; reuse same model
                 let pa = Int(250 + smoothNoise(seed: 32, scale: 60.0) * 100.0)
                 let raw = UInt16(bitPattern: Int16(clamping: pa))
-                let A = Int((raw >> 8) & 0xFF)
-                let B = Int(raw & 0xFF)
-                return "54 " + String(format: "%02X %02X", A, B)
+                let highByte = Int((raw >> 8) & 0xFF)
+                let lowByte = Int(raw & 0xFF)
+                return "54 " + String(format: "%02X %02X", highByte, lowByte)
             case .shortO2TrimB1:
-                let A = UInt8(clamping: 128 + Int((smoothNoise(seed: 33, scale: 0.06) * 255.0)))
-                return "55 " + String(format: "%02X 00", A)
+                let trimByte = UInt8(clamping: 128 + Int((smoothNoise(seed: 33, scale: 0.06) * 255.0)))
+                return "55 " + String(format: "%02X 00", trimByte)
             case .longO2TrimB1:
-                let A = UInt8(clamping: 128 + Int((smoothNoise(seed: 34, scale: 0.03) * 255.0)))
-                return "56 " + String(format: "%02X 00", A)
+                let trimByte = UInt8(clamping: 128 + Int((smoothNoise(seed: 34, scale: 0.03) * 255.0)))
+                return "56 " + String(format: "%02X 00", trimByte)
             case .shortO2TrimB2:
-                let A = UInt8(clamping: 128 + Int((smoothNoise(seed: 35, scale: 0.06) * 255.0)))
-                return "57 " + String(format: "%02X 00", A)
+                let trimByte = UInt8(clamping: 128 + Int((smoothNoise(seed: 35, scale: 0.06) * 255.0)))
+                return "57 " + String(format: "%02X 00", trimByte)
             case .longO2TrimB2:
-                let A = UInt8(clamping: 128 + Int((smoothNoise(seed: 36, scale: 0.03) * 255.0)))
-                return "58 " + String(format: "%02X 00", A)
+                let trimByte = UInt8(clamping: 128 + Int((smoothNoise(seed: 36, scale: 0.03) * 255.0)))
+                return "58 " + String(format: "%02X 00", trimByte)
             case .fuelRailPressureAbs:
                 // Simulate returnless port fuel injection: ~400 kPa ±10%
                 let kPa = 400.0 + smoothNoise(seed: 37, scale: 40.0) // 360–440 kPa
                 let raw = UInt16(clamping: Int((kPa / 10.0).rounded())) // per spec (A*256+B)*10
-                let A = Int((raw >> 8) & 0xFF)
-                let B = Int(raw & 0xFF)
-                return "59 " + String(format: "%02X %02X", A, B)
+                let highByte = Int((raw >> 8) & 0xFF)
+                let lowByte = Int(raw & 0xFF)
+                return "59 " + String(format: "%02X %02X", highByte, lowByte)
 
             case .relativeAccelPos:
                 let pct = UInt8(clamping: Int((max(0.0, min(1.0, 0.1 + 0.8 * (0.5 + 0.5 * sin(sessionElapsed() * 0.4)))) * 255.0).rounded()))
@@ -1001,9 +1000,9 @@ private extension MOCKComm {
                 let decline = sessionElapsed() / 600.0
                 let percent = max(50.0, 90.0 - decline)
                 let raw = max(0, min(65535, Int((percent / 100.0) * 65535.0)))
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                return "5B " + String(format: "%02X %02X", A, B)
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = raw & 0xFF
+                return "5B " + String(format: "%02X %02X", highByte, lowByte)
             case .engineOilTemp:
                 let t = sessionElapsed()
                 let target = 100.0
@@ -1026,10 +1025,10 @@ private extension MOCKComm {
 
                 // Encode per SAE J1979: raw = (deg * 10) + 21000
                 let raw = Int((deg * 10.0) + 21000.0)
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = raw & 0xFF
 
-                return "5D " + String(format: "%02X %02X", A, B)
+                return "5D " + String(format: "%02X %02X", highByte, lowByte)
 
             case .fuelRate:
                 let speedValue = currentMockSpeed()
@@ -1039,9 +1038,9 @@ private extension MOCKComm {
                 var lph = 1.2 + 18.0 * load + 10.0 * rpmN + smoothNoise(seed: 13, scale: 0.8)
                 lph = max(0.5, min(60.0, lph))
                 let raw = Int((lph * 20.0).rounded())
-                let A = (raw >> 8) & 0xFF
-                let B = raw & 0xFF
-                return "5E " + String(format: "%02X %02X", A, B)
+                let highByte = (raw >> 8) & 0xFF
+                let lowByte = raw & 0xFF
+                return "5E " + String(format: "%02X %02X", highByte, lowByte)
             case .emissionsReq:
                 return "5F 01"
             }

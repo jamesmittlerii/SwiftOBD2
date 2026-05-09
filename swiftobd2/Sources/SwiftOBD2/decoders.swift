@@ -90,7 +90,7 @@ extension Unit {
     static let poundsPerMinute = Unit(symbol: "lb/min")
     static let none = Unit(symbol: "")
     static let rpm = Unit(symbol: "rpm")
-    static let Pascal = Unit(symbol: "Pa")
+    static let pascal = Unit(symbol: "Pa")
     static let bar = Unit(symbol: "bar")
     static let ppm = Unit(symbol: "ppm")
     static let ratio = Unit(symbol: "ratio")
@@ -109,10 +109,15 @@ class UAS {
         self.offset = offset
     }
 
-    func decode(bytes: Data, _ unit_: MeasurementUnit = .metric) -> MeasurementResult {
+    func decode(bytes: Data, _ unit: MeasurementUnit = .metric) -> MeasurementResult {
         let local = Data(bytes)
+        let baseUnit = self.unit
         guard !local.isEmpty else {
-            return MeasurementResult(value: 0, unit: unit)
+            if unit == .imperial {
+                let (_, convertedUnit) = convertToImperial(value: 0, baseUnit: baseUnit)
+                return MeasurementResult(value: 0, unit: convertedUnit)
+            }
+            return MeasurementResult(value: 0, unit: baseUnit)
         }
 
         let bitWidth = local.count * 8
@@ -129,9 +134,8 @@ class UAS {
         }
 
         let baseValue = Double(intValue) * scale + offset
-        let baseUnit = self.unit
 
-        if unit_ == .imperial {
+        if unit == .imperial {
             let (convertedValue, convertedUnit) = convertToImperial(value: baseValue, baseUnit: baseUnit)
             return MeasurementResult(value: convertedValue, unit: convertedUnit)
         } else {
@@ -218,7 +222,7 @@ private var uasIDS: [UInt8: UAS] = {
         0x99: UAS(signed: true, scale: 0.1, unit: UnitPressure.kilopascals),
         0xFC: UAS(signed: true, scale: 0.01, unit: UnitPressure.kilopascals),
         0xFD: UAS(signed: true, scale: 0.001, unit: UnitPressure.kilopascals),
-        0xFE: UAS(signed: true, scale: 0.25, unit: Unit.Pascal),
+        0xFE: UAS(signed: true, scale: 0.25, unit: Unit.pascal),
     ]
 }()
 
@@ -323,14 +327,14 @@ struct MonitorDecoder: Decoder {
 
         let mon = Monitor()
 
-        let extra_bytes = databytes.count % 9
-        if extra_bytes != 0 {
-            databytes = databytes.dropLast(extra_bytes)
+        let extraBytes = databytes.count % 9
+        if extraBytes != 0 {
+            databytes = databytes.dropLast(extraBytes)
         }
 
         for i in stride(from: 0, to: databytes.count, by: 9) {
             let subdata = databytes.subdata(in: i..<i + 9)
-            let test = parse_monitor_test(subdata)
+            let test = parseMonitorTest(subdata)
             if let test = test, let tid = test.tid {
                 mon.tests[tid] = test
             }
@@ -338,7 +342,7 @@ struct MonitorDecoder: Decoder {
         return .success(.measurementMonitor(mon))
     }
 
-    func parse_monitor_test(_ data: Data) -> MonitorTest? {
+    func parseMonitorTest(_ data: Data) -> MonitorTest? {
         var test = MonitorTest()
 
         let local = Data(data)
@@ -347,7 +351,7 @@ struct MonitorDecoder: Decoder {
         let tid = local[1]
         let cid = local[2]
 
-        if let testInfo = TestIds[tid] {
+        if let testInfo = testIds[tid] {
             test.name = testInfo.0
             test.desc = testInfo.1
         } else {
@@ -378,10 +382,10 @@ struct FuelRateDecoder: Decoder {
         let bytes = Data(data)
         guard bytes.count >= 2 else { return .failure(.invalidData) }
 
-        let A = Int(bytes[0])
-        let B = Int(bytes[1])
+        let highByte = Int(bytes[0])
+        let lowByte = Int(bytes[1])
 
-        let fuelRateLph = Double((A << 8) | B) * 0.05
+        let fuelRateLph = Double((highByte << 8) | lowByte) * 0.05
 
         let result: MeasurementResult
         switch unit {
@@ -434,7 +438,7 @@ struct EvapPressureAltDecoder: Decoder {
     func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let local = Data(data)
         let value = Double(bytesToInt(local)) - 32767
-        return .success(.measurementResult(MeasurementResult(value: value, unit: Unit.Pascal)))
+        return .success(.measurementResult(MeasurementResult(value: value, unit: Unit.pascal)))
     }
 }
 
@@ -457,8 +461,8 @@ struct FuelTypeDecoder: Decoder {
         guard bytes.count > 0 else { return .failure(.invalidData) }
         let i = bytes[0]
         var value: String?
-        if i < FuelTypes.count {
-            value = FuelTypes[Int(i)]
+        if i < fuelTypes.count {
+            value = fuelTypes[Int(i)]
         }
         guard let value else { return .failure(.invalidData) }
         return .success(.stringResult(value))
@@ -585,8 +589,8 @@ struct OBDComplianceDecoder: Decoder {
         guard bytes.count > 1 else { return .failure(.invalidData) }
         let i = bytes[1]
 
-        if i < OBD_COMPLIANCE.count {
-            return .success(.stringResult(OBD_COMPLIANCE[Int(i)]))
+        if i < obdCompliance.count {
+            return .success(.stringResult(obdCompliance[Int(i)]))
         } else {
             return .failure(.decodingFailed(reason: "Invalid response for OBD compliance (no table entry)"))
         }
@@ -661,11 +665,11 @@ struct FuelStatusDecoder: Decoder {
 
         switch setBits {
         case 0:
-            return StatusCodeMetadata(code: "0", description: FUEL_STATUS["0"]!)
+            return StatusCodeMetadata(code: "0", description: fuelStatus["0"]!)
         case 1:
             guard let index = bits.firstIndex(of: 1) else { return nil }
             let code = 8 - index
-            guard let status = FUEL_STATUS[String(code)] else {
+            guard let status = fuelStatus[String(code)] else {
                 obdError("Invalid fuel status code \(code)", category: .parsing)
                 return nil
             }
@@ -693,13 +697,13 @@ struct CurrentCenteredDecoder: Decoder {
             bytes = Data(bytes.dropFirst(2))
         }
 
-        guard let A = bytes.first else {
+        guard let currentByte = bytes.first else {
             return .failure(.invalidData)
         }
 
-        let current_mA = (Double(A) - 128.0) * (2.0 / 128.0)
+        let currentMilliAmps = (Double(currentByte) - 128.0) * (2.0 / 128.0)
 
-        return .success(.measurementResult(MeasurementResult(value: current_mA, unit: UnitElectricCurrent.milliamperes)))
+        return .success(.measurementResult(MeasurementResult(value: currentMilliAmps, unit: UnitElectricCurrent.milliamperes)))
     }
 }
 
@@ -795,38 +799,38 @@ struct StatusDecoder: Decoder {
         let milOn = (milAndCount & 0x80) != 0
         let dtcCount = Int(milAndCount & 0x7F)
 
-        let A = bytes[safe: 1] ?? 0
-        let B = bytes[safe: 2] ?? 0
-        let C = bytes[safe: 3] ?? 0
+        let baseMonitorByte = bytes[safe: 1] ?? 0
+        let supportedMonitorByte = bytes[safe: 2] ?? 0
+        let readinessByte = bytes[safe: 3] ?? 0
 
-        let isDiesel = (A & 0x08) != 0
+        let isDiesel = (baseMonitorByte & 0x08) != 0
 
         var monitors: [ReadinessMonitor] = []
 
         if isDiesel {
             monitors = [
-                .init(name: "Misfire", supported: true, ready: (A & 0x10) == 0),
-                .init(name: "Fuel System", supported: true, ready: (A & 0x20) == 0),
-                .init(name: "Comprehensive Components", supported: true, ready: (A & 0x40) == 0),
-                .init(name: "NMHC catalyst", supported: (B & 0x01) != 0, ready: (C & 0x01) == 0),
-                .init(name: "HNOx/SCR Catalyst", supported: (B & 0x02) != 0, ready: (C & 0x02) == 0),
-                .init(name: "Boost pressure", supported: (B & 0x08) != 0, ready: (C & 0x08) == 0),
-                .init(name: "Exhaust gas", supported: (B & 0x20) != 0, ready: (C & 0x20) == 0),
-                .init(name: "PM filter", supported: (B & 0x40) != 0, ready: (C & 0x40) == 0),
-                .init(name: "EGR/VVT System", supported: (B & 0x80) != 0, ready: (C & 0x80) == 0)
+                .init(name: "Misfire", supported: true, ready: (baseMonitorByte & 0x10) == 0),
+                .init(name: "Fuel System", supported: true, ready: (baseMonitorByte & 0x20) == 0),
+                .init(name: "Comprehensive Components", supported: true, ready: (baseMonitorByte & 0x40) == 0),
+                .init(name: "NMHC catalyst", supported: (supportedMonitorByte & 0x01) != 0, ready: (readinessByte & 0x01) == 0),
+                .init(name: "HNOx/SCR Catalyst", supported: (supportedMonitorByte & 0x02) != 0, ready: (readinessByte & 0x02) == 0),
+                .init(name: "Boost pressure", supported: (supportedMonitorByte & 0x08) != 0, ready: (readinessByte & 0x08) == 0),
+                .init(name: "Exhaust gas", supported: (supportedMonitorByte & 0x20) != 0, ready: (readinessByte & 0x20) == 0),
+                .init(name: "PM filter", supported: (supportedMonitorByte & 0x40) != 0, ready: (readinessByte & 0x40) == 0),
+                .init(name: "EGR/VVT System", supported: (supportedMonitorByte & 0x80) != 0, ready: (readinessByte & 0x80) == 0)
             ]
         } else {
             monitors = [
-                .init(name: "Misfire", supported: true, ready: (A & 0x10) == 0),
-                .init(name: "Fuel System", supported: true, ready: (A & 0x20) == 0),
-                .init(name: "Comprehensive Components", supported: true, ready: (A & 0x40) == 0),
-                .init(name: "Catalyst", supported: (B & 0x01) != 0, ready: (C & 0x01) == 0),
-                .init(name: "Heated Catalyst", supported: (B & 0x02) != 0, ready: (C & 0x02) == 0),
-                .init(name: "Evaporative System", supported: (B & 0x04) != 0, ready: (C & 0x04) == 0),
-                .init(name: "Secondary Air System", supported: (B & 0x08) != 0, ready: (C & 0x08) == 0),
-                .init(name: "O₂ Sensor", supported: (B & 0x20) != 0, ready: (C & 0x20) == 0),
-                .init(name: "O₂ Heater", supported: (B & 0x40) != 0, ready: (C & 0x40) == 0),
-                .init(name: "EGR/VVT System", supported: (B & 0x80) != 0, ready: (C & 0x80) == 0)
+                .init(name: "Misfire", supported: true, ready: (baseMonitorByte & 0x10) == 0),
+                .init(name: "Fuel System", supported: true, ready: (baseMonitorByte & 0x20) == 0),
+                .init(name: "Comprehensive Components", supported: true, ready: (baseMonitorByte & 0x40) == 0),
+                .init(name: "Catalyst", supported: (supportedMonitorByte & 0x01) != 0, ready: (readinessByte & 0x01) == 0),
+                .init(name: "Heated Catalyst", supported: (supportedMonitorByte & 0x02) != 0, ready: (readinessByte & 0x02) == 0),
+                .init(name: "Evaporative System", supported: (supportedMonitorByte & 0x04) != 0, ready: (readinessByte & 0x04) == 0),
+                .init(name: "Secondary Air System", supported: (supportedMonitorByte & 0x08) != 0, ready: (readinessByte & 0x08) == 0),
+                .init(name: "O₂ Sensor", supported: (supportedMonitorByte & 0x20) != 0, ready: (readinessByte & 0x20) == 0),
+                .init(name: "O₂ Heater", supported: (supportedMonitorByte & 0x40) != 0, ready: (readinessByte & 0x40) == 0),
+                .init(name: "EGR/VVT System", supported: (supportedMonitorByte & 0x80) != 0, ready: (readinessByte & 0x80) == 0)
             ]
         }
 
@@ -915,7 +919,7 @@ let compressionTests = [
     "EGR_VVT_SYSTEM_MONITORING",
 ]
 
-let FUEL_STATUS: [String: String] = [
+let fuelStatus: [String: String] = [
     "0": "Unavailable",
     "1": "Open Loop (cold engine)",
     "2": "Closed Loop (normal operation)",
@@ -924,7 +928,7 @@ let FUEL_STATUS: [String: String] = [
     "5": "Closed loop: O₂ fault in feedback"
 ]
 
-let FuelTypes = [
+let fuelTypes = [
     "Not available",
     "Gasoline",
     "Methanol",
@@ -951,7 +955,7 @@ let FuelTypes = [
     "Bifuel running diesel",
 ]
 
-let OBD_COMPLIANCE = [
+let obdCompliance = [
     "Undefined",
     "OBD-II as defined by the CARB",
     "OBD as defined by the EPA",
@@ -988,7 +992,7 @@ let OBD_COMPLIANCE = [
     "Heavy Duty Euro OBD Stage VI (HD EOBD-IV)",
 ]
 
-let TestIds: [UInt8: (String, String)] = [
+let testIds: [UInt8: (String, String)] = [
     0x01: ("RTLThresholdVoltage", "The voltage at which the sensor switches from rich to lean"),
     0x02: ("LTRThresholdVoltage", "The voltage at which the sensor switches from lean to rich"),
     0x03: ("LowVoltageSwitchTime", "The time it takes for the sensor to switch from rich to lean"),
