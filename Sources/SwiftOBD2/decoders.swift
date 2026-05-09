@@ -318,7 +318,7 @@ public enum Decoders: Equatable, Encodable {
 }
 
 struct MonitorDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         var databytes = Data(data)
 
         let mon = Monitor()
@@ -397,7 +397,7 @@ struct FuelRateDecoder: Decoder {
 }
 
 struct DTCDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let local = Data(data)
         var codes: [TroubleCodeMetadata] = []
         for n in stride(from: 0, to: local.count - 1, by: 2) {
@@ -410,7 +410,7 @@ struct DTCDecoder: Decoder {
 }
 
 struct InjectTimingDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let local = Data(data)
         guard local.count >= 2 else {
             return .failure(.invalidData)
@@ -431,7 +431,7 @@ struct InjectTimingDecoder: Decoder {
 
 
 struct EvapPressureAltDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let local = Data(data)
         let value = Double(bytesToInt(local)) - 32767
         return .success(.measurementResult(MeasurementResult(value: value, unit: Unit.Pascal)))
@@ -452,7 +452,7 @@ struct AbsEvapPressureDecoder: Decoder {
 }
 
 struct FuelTypeDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         guard bytes.count > 0 else { return .failure(.invalidData) }
         let i = bytes[0]
@@ -466,7 +466,7 @@ struct FuelTypeDecoder: Decoder {
 }
 
 struct MaxMafDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         guard bytes.count > 0 else { return .failure(.invalidData) }
         let value = Double(bytes[0]) * 10.0
@@ -475,7 +475,7 @@ struct MaxMafDecoder: Decoder {
 }
 
 struct AbsoluteLoadDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let local = Data(data)
         let value = (bytesToInt(local) * 100) / 255
         return .success(.measurementResult(MeasurementResult(value: Double(value), unit: Unit.percent)))
@@ -537,7 +537,7 @@ struct EvapPressureDecoder: Decoder {
 }
 
 struct SensorVoltageBigDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         guard bytes.indices.contains(2) && bytes.indices.contains(3) else {
             return .failure(.invalidData)
@@ -549,7 +549,7 @@ struct SensorVoltageBigDecoder: Decoder {
 }
 
 struct SensorVoltageDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         guard bytes.count == 2 else { return .failure(.invalidData) }
         let voltage = Double(bytes.first ?? 0) / 200
@@ -628,7 +628,7 @@ struct FuelPressureDecoder: Decoder {
 }
 
 struct AirStatusDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         let bits = BitArray(data: bytes).binaryArray
 
@@ -642,7 +642,7 @@ struct AirStatusDecoder: Decoder {
 }
 
 struct FuelStatusDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         let bits = BitArray(data: bytes)
 
@@ -678,7 +678,7 @@ struct FuelStatusDecoder: Decoder {
 }
 
 struct SingleDTCDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         let troubleCode = parseDTC(bytes)
         return .success(.troubleCode(troubleCode.map { [$0] } ?? []))
@@ -686,7 +686,7 @@ struct SingleDTCDecoder: Decoder {
 }
 
 struct CurrentCenteredDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         var bytes = Data(data)
 
         if bytes.count >= 3 && bytes[0] == 0x41 {
@@ -704,7 +704,7 @@ struct CurrentCenteredDecoder: Decoder {
 }
 
 struct PercentCenteredDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         var value = Double(bytes.first ?? 0)
         value = (value - 128) * 100.0 / 128.0
@@ -713,7 +713,7 @@ struct PercentCenteredDecoder: Decoder {
 }
 
 struct PercentDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         var value = Double(bytes.first ?? 0)
         value = value * 100.0 / 255.0
@@ -735,7 +735,7 @@ struct TemperatureDecoder: Decoder {
 }
 
 struct StringDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         guard var string = String(bytes: bytes, encoding: .utf8) else {
             return .failure(.decodingFailed(reason: "Failed to decode string"))
@@ -785,7 +785,7 @@ extension Data {
 }
 
 struct StatusDecoder: Decoder {
-    func decode(data: Data, unit: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
+    func decode(data: Data, unit _: MeasurementUnit) -> Result<DecodeResult, DecodeError> {
         let bytes = Data(data)
         guard bytes.count >= 4 else {
             return .failure(.invalidData)

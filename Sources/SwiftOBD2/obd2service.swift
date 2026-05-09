@@ -43,6 +43,16 @@ public class ConfigurationService {
 ///   - Providing information about the vehicle.
 ///   - Managing the connection state.
 public class OBDService: ObservableObject, OBDServiceDelegate {
+    private final class ContinuousUpdateState {
+        var currentInterval: TimeInterval
+        var consecutiveFailures = 0
+        var inFlight = false
+
+        init(currentInterval: TimeInterval) {
+            self.currentInterval = currentInterval
+        }
+    }
+
     @Published public private(set) var connectionState: ConnectionState = .disconnected
     @Published public private(set) var isScanning: Bool = false
     @Published public private(set) var connectedPeripheral: CBPeripheral?
@@ -219,6 +229,67 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
             .store(in: &cancellables)
     }
 
+    private func makeContinuousUpdateFuture(
+        pids: [OBDCommand],
+        unit: MeasurementUnit,
+        intervalSubject: CurrentValueSubject<TimeInterval, Never>,
+        minInterval: TimeInterval,
+        maxInterval: TimeInterval,
+        state: ContinuousUpdateState
+    ) -> Future<[OBDCommand: DecodeResult], Error> {
+        Future { promise in
+            guard !state.inFlight else {
+                return
+            }
+
+            state.inFlight = true
+
+            Task(priority: .userInitiated) {
+                defer { state.inFlight = false }
+
+                do {
+                    let aggregatedResults = try await self.collectContinuousUpdateResults(for: pids, unit: unit)
+                    state.consecutiveFailures = 0
+                    state.currentInterval = max(minInterval, state.currentInterval * 0.9)
+                    intervalSubject.send(state.currentInterval)
+                    promise(.success(aggregatedResults))
+                } catch {
+                    state.consecutiveFailures += 1
+                    state.currentInterval = min(maxInterval, state.currentInterval * 1.5)
+                    intervalSubject.send(state.currentInterval)
+                    obdInfo("Backoff increased: interval=\(state.currentInterval)s (failures=\(state.consecutiveFailures))", category: .communication)
+                    promise(.failure(error))
+                }
+            }
+        }
+    }
+
+    private func collectContinuousUpdateResults(
+        for pids: [OBDCommand],
+        unit: MeasurementUnit
+    ) async throws -> [OBDCommand: DecodeResult] {
+        var aggregatedResults: [OBDCommand: DecodeResult] = [:]
+        var hadFailureThisCycle = false
+
+        for pid in pids {
+            do {
+                let singleResult = try await requestPID(pid, unit: unit)
+                for (command, value) in singleResult {
+                    aggregatedResults[command] = value
+                }
+            } catch {
+                hadFailureThisCycle = true
+                obdWarning("requestPID failed for \(pid): \(error)", category: .communication)
+            }
+        }
+
+        if hadFailureThisCycle, aggregatedResults.isEmpty {
+            throw OBDServiceError.notConnectedToVehicle
+        }
+
+        return aggregatedResults
+    }
+
     // MARK: - Request Handling
 
     var pidList: [OBDCommand] = []
@@ -236,12 +307,10 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
         // Adaptive backoff state
         let minInterval: TimeInterval = max(0.2, interval) // don’t go below 200ms
         let maxInterval: TimeInterval = max(interval * 4, 2.0) // up to 4x or at least 2s
-        var currentInterval: TimeInterval = interval
-        var consecutiveFailures = 0
-        var inFlight = false
+        let state = ContinuousUpdateState(currentInterval: interval)
 
         // A subject that lets us reconfigure the timer dynamically
-        let intervalSubject = CurrentValueSubject<TimeInterval, Never>(currentInterval)
+        let intervalSubject = CurrentValueSubject<TimeInterval, Never>(state.currentInterval)
 
         // Build a dynamic timer stream driven by intervalSubject
         let timerStream = intervalSubject
@@ -265,54 +334,18 @@ public class OBDService: ObservableObject, OBDServiceDelegate {
 
         return timerStream
             .flatMap { [weak self] _ -> Future<[OBDCommand: DecodeResult], Error> in
-                Future { promise in
-                    guard let self = self else {
-                        promise(.failure(OBDServiceError.notConnectedToVehicle))
-                        return
-                    }
-
-                    // Skip tick if a previous cycle is still running
-                    if inFlight {
-                        return
-                    }
-                    inFlight = true
-
-                    Task(priority: .userInitiated) {
-                        var aggregatedResults: [OBDCommand: DecodeResult] = [:]
-                        var hadFailureThisCycle = false
-
-                        for pid in pids {
-                            do {
-                               let singleResult = try await self.requestPID(pid, unit: unit)
-                                for (command, value) in singleResult {
-                                    aggregatedResults[command] = value
-                                }
-                            } catch {
-                                hadFailureThisCycle = true
-                                obdWarning("requestPID failed for \(pid): \(error)", category: .communication)
-                                // continue to next PID for resilience
-                                continue
-                            }
-                        }
-
-                        // Adjust backoff after the cycle
-                        if hadFailureThisCycle {
-                            consecutiveFailures += 1
-                            // Exponential backoff with cap
-                            currentInterval = min(maxInterval, currentInterval * 1.5)
-                            intervalSubject.send(currentInterval)
-                            obdInfo("Backoff increased: interval=\(currentInterval)s (failures=\(consecutiveFailures))", category: .communication)
-                        } else {
-                            // On success, slowly recover toward minInterval
-                            consecutiveFailures = 0
-                            currentInterval = max(minInterval, currentInterval * 0.9)
-                            intervalSubject.send(currentInterval)
-                        }
-
-                        inFlight = false
-                        promise(.success(aggregatedResults))
-                    }
+                guard let self else {
+                    return Future { $0(.failure(OBDServiceError.notConnectedToVehicle)) }
                 }
+
+                return self.makeContinuousUpdateFuture(
+                    pids: pids,
+                    unit: unit,
+                    intervalSubject: intervalSubject,
+                    minInterval: minInterval,
+                    maxInterval: maxInterval,
+                    state: state
+                )
             }
             // Complete the stream when we see a disconnect or error
             .prefix(untilOutputFrom: disconnectSignal)
