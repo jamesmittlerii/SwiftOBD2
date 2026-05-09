@@ -32,10 +32,11 @@ jobs:
         working-directory: swiftobd2
 
       - name: Run tests with coverage
+        working-directory: swiftobd2
         run: |
           set -euo pipefail
           swift test --enable-code-coverage --parallel
-          working-directory: swiftobd2
+         
 
       - name: Convert coverage to Sonar Generic XML
         run: |
