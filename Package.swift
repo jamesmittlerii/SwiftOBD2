@@ -17,13 +17,15 @@ let package = Package(
     targets: [
         .target(
             name: "SwiftOBD2",
+            path: "swiftobd2/Sources/SwiftOBD2",
             resources: [
                 .process("Resources")        // ✅ This is required
             ]
         ),
         .testTarget(
             name: "SwiftOBD2Tests",
-            dependencies: ["SwiftOBD2"]
+            dependencies: ["SwiftOBD2"],
+            path: "swiftobd2/Tests"
         ),
     ]
 )
