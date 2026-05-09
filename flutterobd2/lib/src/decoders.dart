@@ -203,28 +203,43 @@ class Uas {
     double baseValue = intValue * scale + offset;
 
     if (targetUnit == MeasurementUnit.imperial) {
-      return _convertToImperial(baseValue, unit);
+      return convertToImperial(baseValue, unit);
     } else {
       return MeasurementResult(baseValue, unit);
     }
   }
 
   MeasurementResult _convertToImperial(double value, Unit baseUnit) {
-    if (baseUnit == Unit.celsius) {
-      return MeasurementResult((value * 1.8) + 32.0, Unit.fahrenheit);
-    } else if (baseUnit == Unit.kilometers) {
-      return MeasurementResult(value * 0.621371, Unit.miles);
-    } else if (baseUnit == Unit.kilometersPerHour) {
-      return MeasurementResult(value * 0.621371, Unit.milesPerHour);
-    } else if (baseUnit == Unit.kilopascals || baseUnit == Unit.bar) {
-      double factor = baseUnit == Unit.bar ? 14.5038 : 0.145038;
-      return MeasurementResult(value * factor, Unit.poundsForcePerSquareInch);
-    } else if (baseUnit == Unit.gramsPerSecond) {
-      return MeasurementResult(value * 0.132277, Unit.poundsPerMinute);
-    } else if (baseUnit == Unit.litersPerHour) {
-      return MeasurementResult(value * 0.264172, Unit.gallonsPerHour);
-    }
-    return MeasurementResult(value, baseUnit);
+    return convertToImperial(value, baseUnit);
+  }
+}
+
+MeasurementResult convertToImperial(double value, Unit baseUnit) {
+  if (baseUnit == Unit.celsius) {
+    return MeasurementResult((value * 1.8) + 32.0, Unit.fahrenheit);
+  } else if (baseUnit == Unit.kilometers) {
+    return MeasurementResult(value * 0.621371, Unit.miles);
+  } else if (baseUnit == Unit.kilometersPerHour) {
+    return MeasurementResult(value * 0.621371, Unit.milesPerHour);
+  } else if (baseUnit == Unit.kilopascals || baseUnit == Unit.bar) {
+    double factor = baseUnit == Unit.bar ? 14.5038 : 0.145038;
+    return MeasurementResult(value * factor, Unit.poundsForcePerSquareInch);
+  } else if (baseUnit == Unit.gramsPerSecond) {
+    return MeasurementResult(value * 0.132277, Unit.poundsPerMinute);
+  } else if (baseUnit == Unit.litersPerHour) {
+    return MeasurementResult(value * 0.264172, Unit.gallonsPerHour);
+  }
+  return MeasurementResult(value, baseUnit);
+}
+
+DecodeResult _createMeasurementResult(
+    double value, Unit baseUnit, MeasurementUnit targetUnit) {
+  if (targetUnit == MeasurementUnit.imperial) {
+    return DecodeResult(
+        measurementResult: convertToImperial(value, baseUnit));
+  } else {
+    return DecodeResult(
+        measurementResult: MeasurementResult(value, baseUnit));
   }
 }
 
@@ -298,14 +313,7 @@ class TemperatureDecoder implements Decoder {
   @override
   DecodeResult decode(Uint8List data, MeasurementUnit unit) {
     double celsius = bytesToInt(data).toDouble() - 40.0;
-    if (unit == MeasurementUnit.imperial) {
-      double fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
-      return DecodeResult(
-          measurementResult: MeasurementResult(fahrenheit, Unit.fahrenheit));
-    } else {
-      return DecodeResult(
-          measurementResult: MeasurementResult(celsius, Unit.celsius));
-    }
+    return _createMeasurementResult(celsius, Unit.celsius, unit);
   }
 }
 
@@ -513,14 +521,7 @@ class FuelPressureDecoder implements Decoder {
   @override
   DecodeResult decode(Uint8List data, MeasurementUnit unit) {
     double value = data.isNotEmpty ? data[0] * 3.0 : 0.0;
-    if (unit == MeasurementUnit.imperial) {
-      value = value * 0.145038; // kPa to psi
-      return DecodeResult(
-          measurementResult:
-              MeasurementResult(value, Unit.poundsForcePerSquareInch));
-    }
-    return DecodeResult(
-        measurementResult: MeasurementResult(value, Unit.kilopascals));
+    return _createMeasurementResult(value, Unit.kilopascals, unit);
   }
 }
 
@@ -528,14 +529,7 @@ class PressureDecoder implements Decoder {
   @override
   DecodeResult decode(Uint8List data, MeasurementUnit unit) {
     final valueKpa = data.isNotEmpty ? data[0].toDouble() : 0.0;
-    if (unit == MeasurementUnit.imperial) {
-      return DecodeResult(
-        measurementResult: MeasurementResult(
-            valueKpa * 0.145038, Unit.poundsForcePerSquareInch),
-      );
-    }
-    return DecodeResult(
-        measurementResult: MeasurementResult(valueKpa, Unit.kilopascals));
+    return _createMeasurementResult(valueKpa, Unit.kilopascals, unit);
   }
 }
 
@@ -570,14 +564,7 @@ class EvapPressureDecoder implements Decoder {
     final combined = ((data[0] << 8) | data[1]);
     final signed = combined >= 0x8000 ? combined - 0x10000 : combined;
     final kpa = signed / 4.0;
-    if (unit == MeasurementUnit.imperial) {
-      return DecodeResult(
-        measurementResult:
-            MeasurementResult(kpa * 0.145038, Unit.poundsForcePerSquareInch),
-      );
-    }
-    return DecodeResult(
-        measurementResult: MeasurementResult(kpa, Unit.kilopascals));
+    return _createMeasurementResult(kpa, Unit.kilopascals, unit);
   }
 }
 
@@ -585,14 +572,7 @@ class AbsEvapPressureDecoder implements Decoder {
   @override
   DecodeResult decode(Uint8List data, MeasurementUnit unit) {
     final valueKpa = bytesToInt(data) / 200.0;
-    if (unit == MeasurementUnit.imperial) {
-      return DecodeResult(
-        measurementResult: MeasurementResult(
-            valueKpa * 0.145038, Unit.poundsForcePerSquareInch),
-      );
-    }
-    return DecodeResult(
-        measurementResult: MeasurementResult(valueKpa, Unit.kilopascals));
+    return _createMeasurementResult(valueKpa, Unit.kilopascals, unit);
   }
 }
 
@@ -626,15 +606,7 @@ class FuelRateDecoder implements Decoder {
     final a = data[0];
     final b = data[1];
     final litersPerHour = (((a << 8) | b) * 0.05);
-    if (unit == MeasurementUnit.imperial) {
-      return DecodeResult(
-        measurementResult:
-            MeasurementResult(litersPerHour * 0.264172, Unit.gallonsPerHour),
-      );
-    }
-    return DecodeResult(
-        measurementResult:
-            MeasurementResult(litersPerHour, Unit.litersPerHour));
+    return _createMeasurementResult(litersPerHour, Unit.litersPerHour, unit);
   }
 }
 
@@ -646,14 +618,7 @@ class GMEngineOilPressureDecoder implements Decoder {
     }
     final pressureKpa = (data[0] * 0.578) * 6.8947;
     final clamped = pressureKpa < 0 ? 0.0 : pressureKpa;
-    if (unit == MeasurementUnit.imperial) {
-      return DecodeResult(
-        measurementResult: MeasurementResult(
-            clamped * 0.145038, Unit.poundsForcePerSquareInch),
-      );
-    }
-    return DecodeResult(
-        measurementResult: MeasurementResult(clamped, Unit.kilopascals));
+    return _createMeasurementResult(clamped, Unit.kilopascals, unit);
   }
 }
 
@@ -665,14 +630,7 @@ class GMACPressureDecoder implements Decoder {
     }
     final pressureKpa = ((data[0] * 1.83) - 14.7) * 6.8947;
     final clamped = pressureKpa < 0 ? 0.0 : pressureKpa;
-    if (unit == MeasurementUnit.imperial) {
-      return DecodeResult(
-        measurementResult: MeasurementResult(
-            clamped * 0.145038, Unit.poundsForcePerSquareInch),
-      );
-    }
-    return DecodeResult(
-        measurementResult: MeasurementResult(clamped, Unit.kilopascals));
+    return _createMeasurementResult(clamped, Unit.kilopascals, unit);
   }
 }
 
