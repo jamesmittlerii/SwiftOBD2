@@ -416,13 +416,13 @@ private extension MOCKComm {
         }
 
         // 2. Dispatch to smaller groups for dynamic responses
-        if let response = _mockMode1EngineAndFuelData(for: command) {
+        if let response = mockMode1EngineAndFuelData(for: command) {
             return response
         }
-        if let response = _mockMode1O2AndEmissionsData(for: command) {
+        if let response = mockMode1O2AndEmissionsData(for: command) {
             return response
         }
-        if let response = _mockMode1ReadinessAndOtherData(for: command) {
+        if let response = mockMode1ReadinessAndOtherData(for: command) {
             return response
         }
 
@@ -490,7 +490,7 @@ private extension MOCKComm {
 
     // MARK: - Grouped Mode 1 Dynamic PID Mock Generators
 
-    private func _mockMode1EngineAndFuelData(for command: OBDCommand.Mode1) -> String? {
+    private func mockMode1EngineAndFuelData(for command: OBDCommand.Mode1) -> String? {
         switch command {
         case .engineLoad:
             return mockEngineLoadResponse()
@@ -548,7 +548,7 @@ private extension MOCKComm {
         }
     }
 
-    private func _mockMode1O2AndEmissionsData(for command: OBDCommand.Mode1) -> String? {
+    private func mockMode1O2AndEmissionsData(for command: OBDCommand.Mode1) -> String? {
         switch command {
         case .fuelStatus:
             return mockFuelStatusResponse()
@@ -610,7 +610,7 @@ private extension MOCKComm {
         }
     }
 
-    private func _mockMode1ReadinessAndOtherData(for command: OBDCommand.Mode1) -> String? {
+    private func mockMode1ReadinessAndOtherData(for command: OBDCommand.Mode1) -> String? {
         switch command {
         case .status:
             return mockStatusResponse()
