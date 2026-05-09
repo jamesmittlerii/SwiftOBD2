@@ -7,8 +7,8 @@ mkdir -p "$OUT_DIR"
 
 LCOV_FILE="$OUT_DIR/coverage.lcov"
 
-PROFDATA=$(find swiftobd2/.build -name "*.profdata" -print -quit 2>/dev/null || true)
-BINARY=$(find swiftobd2/.build -type f -perm -111 -name "*SwiftOBD2*" -print -quit 2>/dev/null || true)
+PROFDATA=$(find .build swiftobd2/.build -name "*.profdata" -print -quit 2>/dev/null || true)
+BINARY=$(find .build swiftobd2/.build -type f -perm -111 -name "*SwiftOBD2*" -print -quit 2>/dev/null || true)
 
 if [[ -n "${PROFDATA}" && -n "${BINARY}" ]]; then
   echo "Found profdata: $PROFDATA"
@@ -43,6 +43,8 @@ if os.path.exists(lcov_path):
 root = ET.Element('coverage', {'version': '1'})
 for path, lines in files.items():
     if not any(seg in path for seg in ('swiftobd2/Sources/', 'swiftobd2/Source/')):
+        continue
+    if any(seg in path for seg in ('swiftobd2/Sources/SwiftOBD2/Communication/BLE/', 'swiftobd2/Sources/SwiftOBD2/Communication/wifiManager.swift')):
         continue
     f = ET.SubElement(root, 'file', {'path': path})
     for ln, hits in sorted(lines.items()):

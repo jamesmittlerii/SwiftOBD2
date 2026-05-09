@@ -29,10 +29,8 @@ jobs:
 
       - name: Resolve dependencies
         run: swift package resolve
-        working-directory: swiftobd2
 
       - name: Run tests with coverage
-        working-directory: swiftobd2
         run: |
           set -euo pipefail
           swift test --enable-code-coverage --parallel
