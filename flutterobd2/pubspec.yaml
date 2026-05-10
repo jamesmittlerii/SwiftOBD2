@@ -1,6 +1,6 @@
 name: flutter_obd2
 description: A complete port of SwiftOBD2, providing an easy-to-use interface to communicate with ELM327 OBD2 adapters over BLE and Wi-Fi.
-version: 0.1.3
+version: 0.1.4
 homepage: https://github.com/jamesmittlerii/SwiftOBD2/tree/main/flutterobd2
 repository: https://github.com/jamesmittlerii/SwiftOBD2
 issue_tracker: https://github.com/jamesmittlerii/SwiftOBD2/issues
