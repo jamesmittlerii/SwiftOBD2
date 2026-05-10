@@ -9,6 +9,7 @@ import com.rheosoft.obdii.core.protocols.UnsupportedTransportError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CancellationException
 
 class ObdService(
     connectionType: LibraryConnectionType = LibraryConnectionType.demo,
@@ -75,6 +76,7 @@ class ObdService(
             // We stay in connectedToAdapter here.
             // The manager will transition to settingUpVehicle while it queries PIDs.
         } catch (t: Throwable) {
+            if (t is CancellationException) throw t
             _connectionState.value = AdapterConnectionState.error
             connectedPeripheral = null
             throw t

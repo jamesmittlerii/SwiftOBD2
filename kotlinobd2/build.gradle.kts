@@ -1,6 +1,7 @@
 plugins {
     id("org.jetbrains.kotlin.jvm") version "2.3.21"
     `java-library`
+    `maven-publish`
     jacoco
 }
 
@@ -23,6 +24,7 @@ java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(21))
     }
+    withSourcesJar()
 }
 
 tasks.test {
@@ -60,6 +62,16 @@ sourceSets {
     main {
         resources {
             srcDir("../swiftobd2/Sources/SwiftOBD2/Resources")
+        }
+    }
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            from(components["java"])
+            groupId = "com.github.jamesmittlerii"
+            artifactId = "kotlinobd2"
         }
     }
 }

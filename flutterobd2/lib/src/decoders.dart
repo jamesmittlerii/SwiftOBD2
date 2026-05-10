@@ -208,10 +208,6 @@ class Uas {
       return MeasurementResult(baseValue, unit);
     }
   }
-
-  MeasurementResult _convertToImperial(double value, Unit baseUnit) {
-    return convertToImperial(value, baseUnit);
-  }
 }
 
 MeasurementResult convertToImperial(double value, Unit baseUnit) {
