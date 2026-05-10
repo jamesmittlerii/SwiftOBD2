@@ -2,4 +2,4 @@ jdk:
   - openjdk21
 
 install:
-  - cd kotlinobd2 && ./gradlew publishToMavenLocal
+  - cd kotlinobd2 && chmod +x gradlew && ./gradlew publishToMavenLocal
