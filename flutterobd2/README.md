@@ -15,7 +15,7 @@ Add `flutter_obd2` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_obd2: ^0.1.0
+  flutter_obd2: ^0.1.3
 ```
 
 ## Usage

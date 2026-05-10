@@ -4,3 +4,7 @@
 - A complete port of SwiftOBD2 to Dart/Flutter.
 - Supports ELM327 OBD2 adapters over BLE and Wi-Fi.
 - Includes command interface, data retrieval, and sensor monitoring.
+
+## 0.1.3
+- [x] Updated dependencies and fixed build errors.
+
