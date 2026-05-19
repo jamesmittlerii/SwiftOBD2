@@ -121,16 +121,14 @@ object Parser {
         // Single frames (includes our simplified legacy frames)
         val singleFrames = frames.filter { it.type == FrameType.SingleFrame }
         for (f in singleFrames) {
-            // CAN SingleFrame: PCI (1 byte) + Mode (1 byte)
-            // Legacy Frame: Mode (1 byte)
-            // We distinguish them by whether a CAN header (3 chars) was used.
-            // For now, let's look at data length and content.
-            
             val isCan = f.raw.startsWith("7E8") || f.raw.startsWith("7E9") // Simplified
-            val dropCount = if (isCan) 2 else 1
-            
-            if (f.data.size >= dropCount) {
-                messages.add(Message(listOf(f), f.data.drop(dropCount)))
+            if (isCan) {
+                val isoPayload = f.data.drop(1).take(f.dataLen ?: 0)
+                if (isoPayload.isNotEmpty()) {
+                    messages.add(Message(listOf(f), isoPayload))
+                }
+            } else if (f.data.size >= 1) {
+                messages.add(Message(listOf(f), f.data.drop(1)))
             }
         }
         

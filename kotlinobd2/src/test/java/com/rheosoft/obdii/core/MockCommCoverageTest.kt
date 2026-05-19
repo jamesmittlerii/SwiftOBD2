@@ -14,12 +14,10 @@ class MockCommCoverageTest {
         field.setLong(this, System.currentTimeMillis() - (seconds * 1000).toLong())
     }
 
-    private fun List<String>.payloadBytes(): List<Int> {
-        return single()
-            .split(" ")
-            .drop(1)
-            .filter { it.matches(Regex("[0-9A-F]{2}")) }
-            .map { it.toInt(16) }
+    private fun List<String>.mode1ValueBytes(valueByteCount: Int = 2): List<Int> {
+        val frame = Parser.parseFrames(this).single()
+        val isoTpPayload = frame.data.drop(1).take(frame.dataLen ?: 0)
+        return isoTpPayload.drop(2).take(valueByteCount)
     }
 
     @Test
@@ -108,6 +106,20 @@ class MockCommCoverageTest {
     }
 
     @Test
+    fun mode1MockFramesSatisfyCanParserSizeRange() = runBlocking {
+        val mock = MockComm()
+        val commands = listOf("0102", "0105", "011C", "010D", "0103", "010C")
+        for (command in commands) {
+            val frames = Parser.parseFrames(mock.sendCommand(command))
+            assertEquals(1, frames.size, command)
+            assertTrue(
+                frames.single().data.size in 6..12,
+                "${frames.single().data.size} bytes for $command",
+            )
+        }
+    }
+
+    @Test
     fun liveMode1ResponsesUseValidHexAndExpectedServicePid() = runBlocking {
         val mock = MockComm()
         val commands = listOf(
@@ -145,11 +157,11 @@ class MockCommCoverageTest {
         assertTrue(thisCycleReadiness.contains("41 41 87 00 EF 02"), thisCycleReadiness)
 
         mock.setElapsedSeconds(70.0)
-        val warmFuelStatus = mock.sendCommand("0103").payloadBytes().takeLast(2)
+        val warmFuelStatus = mock.sendCommand("0103").mode1ValueBytes()
         assertEquals(listOf(0x02, 0x02), warmFuelStatus)
 
         mock.setElapsedSeconds(60.0)
-        val coastingFuelStatus = mock.sendCommand("0103").payloadBytes().takeLast(2)
+        val coastingFuelStatus = mock.sendCommand("0103").mode1ValueBytes()
         assertEquals(listOf(0x02, 0x02), coastingFuelStatus)
     }
 

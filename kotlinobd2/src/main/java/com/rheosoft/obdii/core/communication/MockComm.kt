@@ -437,12 +437,21 @@ class MockComm : CommProtocol {
         // If it's already a PCI byte (Single/First/Consecutive/FlowControl), don't add another.
         // PCI bytes are 0x00..0x3F for Single/First/Consecutive/FlowControl
         val hasPci = firstByte <= 0x3F
-        
-        val content = if (hasPci) body else {
-            val pci = "%02X".format(tokens.size)
-            "$pci $body"
+
+        val dataTokens =
+            if (hasPci) {
+                tokens
+            } else {
+                val pci = "%02X".format(tokens.size)
+                listOf(pci) + tokens
+            }
+        // Swift mock pads short ISO-TP payloads to a full 8-byte CAN frame (00 fill).
+        val padded = buildList {
+            addAll(dataTokens)
+            while (size < 8) add("00")
         }
-        
+        val content = padded.joinToString(" ")
+
         return if (headersEnabled) "7E8 $content" else content
     }
 
