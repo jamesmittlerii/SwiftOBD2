@@ -23,14 +23,16 @@ class ProtocolTest {
     @Test
     fun testCanSingleFrame() {
         for (protocol in can11Protocols) {
+            // PCI 06 + 6-byte ISO payload; parseMessages keeps payload after PCI (includes mode 41).
             val response = protocol.parse(listOf("7E8 06 41 00 00 01 02 03"))
             assertEquals(1, response.size)
             assertNotNull(response[0].data)
-            assertEquals(listOf(0x00, 0x00, 0x01, 0x02, 0x03), response[0].data)
+            assertEquals(listOf(0x41, 0x00, 0x00, 0x01, 0x02, 0x03), response[0].data)
 
-            // Minimum valid length
+            // Minimum valid length (PCI 01 + mode byte only)
             val minValid = protocol.parse(listOf("7E8 01 41"))
             assertEquals(1, minValid.size)
+            assertEquals(listOf(0x41), minValid[0].data)
 
             // Too short
             val tooShort = protocol.parse(listOf("7E8 01"))

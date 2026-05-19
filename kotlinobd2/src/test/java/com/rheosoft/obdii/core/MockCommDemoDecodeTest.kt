@@ -24,8 +24,8 @@ class MockCommDemoDecodeTest {
         assertIs<DecodeResult.Measurement>(rpm)
         assertIs<DecodeResult.Measurement>(volts)
 
-        val rpmValue = (rpm as DecodeResult.Measurement).value.value
-        val voltValue = (volts as DecodeResult.Measurement).value.value
+        val rpmValue = rpm.value.value
+        val voltValue = volts.value.value
 
         val rpmLines = mock.sendCommand("010C")
         val voltLines = mock.sendCommand("0142")
@@ -53,8 +53,8 @@ class MockCommDemoDecodeTest {
         assertIs<DecodeResult.Measurement>(fromHex)
         assertIs<DecodeResult.Measurement>(fromConn)
 
-        val rpmHex = (fromHex as DecodeResult.Measurement).value.value
-        val rpmConn = (fromConn as DecodeResult.Measurement).value.value
+        val rpmHex = fromHex.value.value
+        val rpmConn = fromConn.value.value
 
         assertTrue(rpmHex in 800.0..8000.0, "parseHexBytes path RPM=$rpmHex")
         assertEquals(
@@ -81,11 +81,6 @@ class MockCommDemoDecodeTest {
         }
 
         val singleFrame = frames.firstOrNull { it.type == FrameType.SingleFrame } ?: return emptyList()
-        val hasCanHeader = singleFrame.raw.substringBefore(' ').length == 3
-        return if (hasCanHeader) {
-            singleFrame.data.drop(1).take(singleFrame.dataLen ?: 0)
-        } else {
-            singleFrame.data
-        }
+        return Parser.parseMessages(frames).firstOrNull()?.data ?: emptyList()
     }
 }
