@@ -16,10 +16,9 @@ jobs:
         with:
           fetch-depth: 2
 
-      # Uses GitHub's built-in CLI tool (gh) to generate the tag and kick off the chain reaction
-      name: Generate Tag and Dispatch Publish
+      - name: Generate Tag and Dispatch Publish
         env:
-          GH_TOKEN: ${{ secrets.TAG_PUSH_TOKEN }} # Uses your custom PAT
+          GH_TOKEN: ${{ secrets.TAG_PUSH_TOKEN }}
         run: |
           OLD_VERSION=$(git show HEAD~1:flutterobd2/pubspec.yaml | grep '^version:' | awk '{print $2}')
           NEW_VERSION=$(grep '^version:' flutterobd2/pubspec.yaml | awk '{print $2}')
@@ -43,7 +42,7 @@ jobs:
             git tag "$NEW_VERSION"
             git push origin "$NEW_VERSION"
             
-            # CRUCIAL: Force-dispatch the publish workflow pointing explicitly to the fresh tag ref
+            # Force-dispatch the publish workflow pointing explicitly to the fresh tag ref
             echo "Dispatching pub.dev publish workflow for tag $NEW_VERSION..."
             gh workflow run flutter_publish.yml --ref "refs/tags/$NEW_VERSION"
           fi
