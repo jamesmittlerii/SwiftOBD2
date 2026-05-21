@@ -12,12 +12,7 @@ permissions:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout tag ref
-        uses: actions/checkout@v4
-
-      - name: Publish Package
-        uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
-        with:
-          working-directory: flutterobd2
+    # Call the official reusable Dart publishing workflow directly at the job level
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: flutterobd2
