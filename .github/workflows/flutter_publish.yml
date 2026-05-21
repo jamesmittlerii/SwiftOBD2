@@ -2,58 +2,46 @@ name: Publish to Pub.dev
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'flutterobd2/pubspec.yaml'
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*' # Matches 1.0.0, 2.1.4-beta, etc.
 
-# Required for OIDC Authentication with pub.dev
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  check-and-publish:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2 # Fetch previous commit to compare versions
-
-      - name: Check if pubspec version incremented
-        id: version_check
-        run: |
-          # Fetch the version from the previous commit
-          OLD_VERSION=$(git show HEAD~1:flutterobd2/pubspec.yaml | grep '^version:' | awk '{print $2}')
-          # Fetch the version from the current commit
-          NEW_VERSION=$(grep '^version:' flutterobd2/pubspec.yaml | awk '{print $2}')
-          
-          echo "Old version: $OLD_VERSION"
-          echo "New version: $NEW_VERSION"
-          
-          if [ "$OLD_VERSION" = "$NEW_VERSION" ]; then
-            echo "Version has not changed. Skipping publishing."
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "Version increment detected ($OLD_VERSION -> $NEW_VERSION)."
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
 
       - name: Setup Flutter
-        if: steps.version_check.outputs.changed == 'true'
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
 
       - name: Install dependencies
-        if: steps.version_check.outputs.changed == 'true'
         run: |
           cd flutterobd2
           flutter pub get
 
+      # Verifies the tag matches the exact version inside pubspec.yaml
+      - name: Verify tag matches pubspec version
+        run: |
+          PUBSPEC_VERSION=$(grep '^version:' flutterobd2/pubspec.yaml | awk '{print $2}')
+          # Strips "refs/tags/" to extract just the raw tag name
+          TAG_VERSION=${GITHUB_REF#refs/tags/}
+          
+          echo "Pubspec version: $PUBSPEC_VERSION"
+          echo "Tag version: $TAG_VERSION"
+          
+          if [ "$PUBSPEC_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: Git tag ($TAG_VERSION) does not match pubspec version ($PUBSPEC_VERSION)"
+            exit 1
+          fi
+
       - name: Publish Package
-        if: steps.version_check.outputs.changed == 'true'
         uses: dart-lang/setup-dart/publish@v1
         with:
           working-directory: flutterobd2
