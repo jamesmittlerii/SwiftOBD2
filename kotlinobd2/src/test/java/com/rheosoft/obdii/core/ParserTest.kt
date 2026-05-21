@@ -16,6 +16,26 @@ class ParserTest {
     }
 
     @Test
+    fun testShortSingleFrameAfterCanHeader() {
+        val raw = listOf("7E8 03 41 0F 2D")
+        val frames = Parser.parseFrames(raw)
+        assertEquals(1, frames.size)
+        assertEquals(FrameType.SingleFrame, frames[0].type)
+        assertEquals(3, frames[0].dataLen)
+        val messages = Parser.parseMessages(frames)
+        assertEquals(listOf(0x41, 0x0F, 0x2D), messages[0].data)
+    }
+
+    @Test
+    fun testCompactShortSingleFrame() {
+        val raw = listOf("7E803410F2D")
+        val frames = Parser.parseFrames(raw)
+        assertEquals(1, frames.size)
+        assertEquals(FrameType.SingleFrame, frames[0].type)
+        assertEquals(3, frames[0].dataLen)
+    }
+
+    @Test
     fun testCompactSingleFrameInitialization() {
         val raw = listOf("7E8064100BE3FA81300")
         val frames = Parser.parseFrames(raw)

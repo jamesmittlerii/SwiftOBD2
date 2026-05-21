@@ -23,7 +23,7 @@ class Elm327(
         obdInfo("Initializing ELM327 adapter...", LogCategory.Connection)
         try {
             sendCommand("ATZ")
-            // Swift parity: allow adapter reset to complete before next command.
+            // Allow adapter reset to finish (v2.x adapters can take >300ms before accepting ATE0).
             delay(300)
             sendCommand("ATE0")
             sendCommand("ATS0")

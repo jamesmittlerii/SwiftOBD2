@@ -67,7 +67,15 @@ object Parser {
     }
 
     private fun canFrame(header: String, bytes: List<Int>, type: FrameType, typeByte: Int): Frame {
-        if (bytes.size < 6 || bytes.size > 12) {
+        // Bytes here are PCI + ISO-TP payload only (CAN ID already stripped). Single-frame
+        // responses are often 4–5 bytes (e.g. "7E8 03 41 0F 2D"), not 6–12 bus-frame bytes.
+        val (minSize, maxSize) = when (type) {
+            FrameType.SingleFrame -> 2 to 8
+            FrameType.FirstFrame -> 3 to 12
+            FrameType.ConsecutiveFrame -> 2 to 12
+            FrameType.FlowControl -> 2 to 12
+        }
+        if (bytes.size < minSize || bytes.size > maxSize) {
             obdError("Invalid frame size: ${bytes.size} bytes", LogCategory.Parsing)
         }
         val dataLen = when (type) {
@@ -97,7 +105,10 @@ object Parser {
             return spaced
         }
 
-        val hasCanHeader = compact.length >= 5 && (compact.length - 3) % 2 == 0
+        val canPrefix = compact.take(3)
+        val hasCanHeader = (canPrefix == "7E8" || canPrefix == "7E9") &&
+            compact.length > 3 &&
+            (compact.length - 3) % 2 == 0
         val start = if (hasCanHeader) 3 else 0
         if (!hasCanHeader && compact.length % 2 != 0) return spaced
         val tokens = mutableListOf<String>()

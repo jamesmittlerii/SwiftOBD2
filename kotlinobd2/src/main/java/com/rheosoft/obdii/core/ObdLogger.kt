@@ -37,9 +37,16 @@ data class LogEntry(
 object ObdLogger {
     private val history = mutableListOf<LogEntry>()
     private const val maxHistory = 1000
-    private const val minLevel = "debug"
+
+    var minLevel: String = configuredMinLevel()
+        set(value) {
+            field = normalizeLevel(value)
+        }
 
     var mutesConsole: Boolean = false
+
+    /** Log raw BLE notify chunks and prompt completion (very noisy during PID polling). */
+    var verboseBleComms: Boolean = false
 
     /**
      * Optional delegate for platform-specific logging (e.g. android.util.Log).
@@ -68,8 +75,7 @@ object ObdLogger {
         platformLogDelegate?.invoke(message, tag, level)
 
         if (!mutesConsole) {
-            val emoji = getEmoji(level)
-            val formattedMessage = "[$emoji $tag] $message"
+            val formattedMessage = "[${level.uppercase()} $tag] $message"
             
             when (level.lowercase()) {
                 "error", "warning" -> System.err.println(formattedMessage)
@@ -88,19 +94,23 @@ object ObdLogger {
         }
     }
 
-    fun getEmoji(level: String): String {
-        return when (level.lowercase()) {
-            "error" -> "🔴"
-            "warning" -> "🟡"
-            "info" -> "🔵"
-            "debug" -> "⚪"
-            else -> "📝"
-        }
-    }
 
     fun getHistory(): List<LogEntry> {
         return synchronized(history) { history.toList() }
     }
+
+    private fun configuredMinLevel(): String =
+        normalizeLevel(
+            System.getProperty("obd.log.level")
+                ?: System.getenv("OBD_LOG_LEVEL")
+                ?: "debug",
+        )
+
+    private fun normalizeLevel(level: String): String =
+        when (level.trim().lowercase()) {
+            "error", "warning", "warn", "info", "debug" -> level.trim().lowercase()
+            else -> "debug"
+        }.let { if (it == "warn") "warning" else it }
 }
 
 fun obdInfo(message: String, category: LogCategory = LogCategory.App) {

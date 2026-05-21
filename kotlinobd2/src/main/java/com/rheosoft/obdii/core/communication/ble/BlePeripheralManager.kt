@@ -17,11 +17,11 @@ class BlePeripheralManager(
             handler.setupCharacteristics(chars)
         }
         val read = handler.readCharacteristic ?: throw CommunicationError("BLE read characteristic not found")
-        if (read.canNotify) {
-            adapter.enableNotifications(peripheral.id, read.uuid)
-        }
         adapter.setNotificationListener(peripheral.id, read.uuid) { payload ->
             handler.handleUpdatedValue(payload)
+        }
+        if (read.canNotify) {
+            adapter.enableNotifications(peripheral.id, read.uuid)
         }
         if (!handler.isReady) throw CommunicationError("BLE characteristic setup incomplete")
     }

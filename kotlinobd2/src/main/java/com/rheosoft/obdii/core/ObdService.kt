@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 
 class ObdService(
     connectionType: LibraryConnectionType = LibraryConnectionType.demo,
@@ -72,6 +73,9 @@ class ObdService(
                 throw UnsupportedTransportError("BLE")
             }
             elm327.connectToAdapter(timeoutMs = timeoutMs, peripheral = peripheral)
+            if (_connectionType.value == LibraryConnectionType.bluetooth) {
+                delay(600)
+            }
             elm327.adapterInitialization()
             // We stay in connectedToAdapter here.
             // The manager will transition to settingUpVehicle while it queries PIDs.
