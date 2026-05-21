@@ -8,3 +8,6 @@
 ## 0.1.3
 - [x] Updated dependencies and fixed build errors.
 
+## 0.1.9
+- [x] Prepping for automation
+
