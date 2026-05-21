@@ -5,6 +5,7 @@ homepage: https://github.com/jamesmittlerii/SwiftOBD2/tree/main/flutterobd2
 repository: https://github.com/jamesmittlerii/SwiftOBD2
 issue_tracker: https://github.com/jamesmittlerii/SwiftOBD2/issues
 
+
 environment:
   sdk: ">=3.0.0 <4.0.0"
   flutter: ">=3.10.0"
