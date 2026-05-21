@@ -1,0 +1,59 @@
+name: Publish to Pub.dev
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'flutterobd2/pubspec.yaml'
+
+# Required for OIDC Authentication with pub.dev
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  check-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # Fetch previous commit to compare versions
+
+      - name: Check if pubspec version incremented
+        id: version_check
+        run: |
+          # Fetch the version from the previous commit
+          OLD_VERSION=$(git show HEAD~1:flutterobd2/pubspec.yaml | grep '^version:' | awk '{print $2}')
+          # Fetch the version from the current commit
+          NEW_VERSION=$(grep '^version:' flutterobd2/pubspec.yaml | awk '{print $2}')
+          
+          echo "Old version: $OLD_VERSION"
+          echo "New version: $NEW_VERSION"
+          
+          if [ "$OLD_VERSION" = "$NEW_VERSION" ]; then
+            echo "Version has not changed. Skipping publishing."
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Version increment detected ($OLD_VERSION -> $NEW_VERSION)."
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Flutter
+        if: steps.version_check.outputs.changed == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install dependencies
+        if: steps.version_check.outputs.changed == 'true'
+        run: |
+          cd flutterobd2
+          flutter pub get
+
+      - name: Publish Package
+        if: steps.version_check.outputs.changed == 'true'
+        uses: dart-lang/setup-dart/publish@v1
+        with:
+          working-directory: flutterobd2
