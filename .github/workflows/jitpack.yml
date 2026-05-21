@@ -1,0 +1,21 @@
+name: Trigger JitPack Build
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*' # Triggered explicitly by raw tags (e.g., 0.1.11)
+
+jobs:
+  trigger-jitpack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping JitPack API to build the tag
+        run: |
+          # Extract the tag name (e.g., v1.0.0)
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "Triggering JitPack build for tag: $TAG_NAME"
+          
+          # Hit the JitPack API endpoint for your repo and tag
+          curl -s "https://jitpack.io/api/builds/com.github.jamesmittlerii/SwiftOBD2/$TAG_NAME"
